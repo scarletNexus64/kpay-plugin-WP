@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+	bootstrap="bootstrap.php"
+	colors="true"
+	failOnWarning="true"
+	failOnRisky="true"
+	beStrictAboutOutputDuringTests="false"
+	cacheDirectory=".phpunit.cache">
+	<testsuites>
+		<testsuite name="K-Pay Gateway">
+			<directory>unit</directory>
+		</testsuite>
+	</testsuites>
+	<source>
+		<include>
+			<directory suffix=".php">../wc-kpay-gateway/includes</directory>
+		</include>
+	</source>
+</phpunit>

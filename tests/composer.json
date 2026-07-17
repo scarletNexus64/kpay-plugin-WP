@@ -1,0 +1,18 @@
+{
+	"name": "kpay/wc-gateway-tests",
+	"description": "Suite de tests pour la passerelle WooCommerce K-Pay",
+	"require-dev": {
+		"phpunit/phpunit": "^10.5",
+		"brain/monkey": "^2.6"
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"KPay\\Tests\\": "unit/"
+		}
+	},
+	"config": {
+		"allow-plugins": {
+			"phpstan/extension-installer": false
+		}
+	}
+}

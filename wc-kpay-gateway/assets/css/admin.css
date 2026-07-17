@@ -1,0 +1,181 @@
+/**
+ * Pages d'administration K-Pay (réglages, soldes et retraits).
+ */
+
+/* --- Logo --- */
+
+.kpay-admin__logo {
+	height: 34px;
+	width: auto;
+	display: block;
+	margin: 8px 0 14px;
+}
+
+/* --- Bandeau d'environnement --- */
+
+.kpay-env-banner {
+	padding: 10px 14px;
+	margin: 12px 0 16px;
+	border-radius: 4px;
+	border-left: 4px solid;
+	background: #fff;
+	max-width: 900px;
+}
+
+.kpay-env-banner--sandbox {
+	border-left-color: #646970;
+	background: #f6f7f7;
+	color: #3c434a;
+}
+
+/* La production engage de l'argent réel : le contraste est délibéré. */
+.kpay-env-banner--live {
+	border-left-color: #b32d2e;
+	background: #fcf0f1;
+	color: #8a2424;
+}
+
+.kpay-admin__title {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.kpay-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	vertical-align: middle;
+}
+
+.kpay-badge--sandbox {
+	background: #f0f0f1;
+	color: #50575e;
+	border: 1px solid #c3c4c7;
+}
+
+/* La production manipule de l'argent réel : le badge doit trancher. */
+.kpay-badge--live {
+	background: #00450c;
+	color: #fff;
+}
+
+/* --- Cartes de solde --- */
+
+.kpay-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 16px;
+	margin: 20px 0;
+}
+
+.kpay-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 8px;
+	padding: 20px;
+}
+
+.kpay-card__currency {
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	color: #646970;
+	text-transform: uppercase;
+}
+
+.kpay-card__amount {
+	font-size: 28px;
+	font-weight: 700;
+	line-height: 1.2;
+	margin: 6px 0 2px;
+	color: #1d2327;
+}
+
+.kpay-card__label {
+	font-size: 13px;
+	color: #646970;
+}
+
+.kpay-card__countries {
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid #f0f0f1;
+	font-size: 12px;
+	color: #646970;
+}
+
+.kpay-card__detail {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 2px 12px;
+	margin: 12px 0 16px;
+	font-size: 13px;
+}
+
+.kpay-card__detail dt {
+	color: #646970;
+}
+
+.kpay-card__detail dd {
+	margin: 0;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- Panneaux --- */
+
+.kpay-panel {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 8px;
+	padding: 4px 20px 20px;
+	margin: 20px 0;
+	max-width: 900px;
+}
+
+.kpay-refresh {
+	margin: 16px 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+/* --- Statuts --- */
+
+.kpay-status {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.kpay-status--completed {
+	background: #d5e5d5;
+	color: #00450c;
+}
+
+.kpay-status--pending,
+.kpay-status--processing {
+	background: #fcf9e8;
+	color: #674600;
+}
+
+.kpay-status--failed,
+.kpay-status--cancelled {
+	background: #f7e4e4;
+	color: #8a2424;
+}
+
+@media (prefers-color-scheme: dark) {
+	.kpay-card,
+	.kpay-panel {
+		background: transparent;
+	}
+}

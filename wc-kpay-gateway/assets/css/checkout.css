@@ -1,0 +1,77 @@
+/**
+ * Champs K-Pay au checkout.
+ *
+ * woocommerce-layout.css impose `width: auto` aux <select> du bloc paiement
+ * via `.woocommerce #payment .form-row select` (spécificité 0,3,1). Nos
+ * sélecteurs reprennent ce niveau de spécificité, sinon le champ Opérateur
+ * reste étriqué à côté du champ téléphone.
+ */
+
+.woocommerce #payment .form-row select.kpay-select,
+.woocommerce-page #payment .form-row select.kpay-select,
+.wc-kpay-fields select {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 0.7em;
+	line-height: 1.4;
+}
+
+.woocommerce #payment .form-row input.kpay-input,
+.woocommerce-page #payment .form-row input.kpay-input,
+.wc-kpay-fields input[type="tel"] {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* --- Checkout en blocs --- */
+
+.wc-kpay-field {
+	margin-bottom: 1em;
+}
+
+.wc-kpay-field__label {
+	display: block;
+	margin-bottom: 0.35em;
+	font-size: 0.9em;
+	line-height: 1.4;
+}
+
+.wc-kpay-field__control {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 0.7em;
+	line-height: 1.4;
+	border: 1px solid currentColor;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	/* Le contour hérité peut être très clair sur certains thèmes. */
+	border-color: rgba(127, 127, 127, 0.5);
+}
+
+.wc-kpay-field__control:focus {
+	outline: 2px solid currentColor;
+	outline-offset: 1px;
+}
+
+.wc-kpay-fields .wc-kpay-sandbox-notice,
+.wc-kpay-fields p {
+	margin: 0 0 0.75em;
+}
+
+/* Logo aligné sur le titre du moyen de paiement, hauteur bornée : un SVG
+   sans contrainte s'étire à la largeur de son conteneur. */
+img.wc-kpay-icon {
+	max-height: 24px;
+	width: auto;
+	vertical-align: middle;
+	margin-left: 6px;
+	display: inline-block;
+}
+
+.wc-kpay-fields .wc-kpay-sandbox-notice {
+	margin: 0 0 1em;
+}

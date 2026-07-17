@@ -1,0 +1,16 @@
+# Dépendances de test : réinstallables via `composer install`
+/tests/vendor/
+/tests/.phpunit.cache/
+/tests/.phpunit.result.cache
+
+# Archives de distribution : générées à la demande
+*.zip
+
+# Système
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.idea/
+.vscode/
+*.swp
