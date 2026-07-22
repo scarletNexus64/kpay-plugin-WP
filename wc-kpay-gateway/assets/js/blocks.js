@@ -12,12 +12,53 @@
 
 	var settings = getSetting( 'kpay_data', {} );
 	var providers = settings.providers || [];
-	var label = decodeEntities( settings.title || __( 'Mobile Money', 'wc-kpay-gateway' ) );
+	var label = decodeEntities( settings.title || __( 'Mobile Money', 'k-pay-for-woocommerce' ) );
 
 	/**
 	 * Champs opérateur + numéro. Les valeurs sont poussées vers le serveur
 	 * via onPaymentSetup, qui les place dans paymentMethodData.
 	 */
+	var isGateway = settings.mode === 'gateway';
+
+	/**
+	 * Mode passerelle : aucun champ à collecter, K-Pay héberge le formulaire.
+	 * Le composant se contente d'annoncer la redirection.
+	 */
+	function KPayRedirectNotice() {
+		var children = [];
+
+		if ( settings.description ) {
+			children.push(
+				createElement( 'p', { key: 'desc' }, decodeEntities( settings.description ) )
+			);
+		}
+
+		if ( settings.isSandbox ) {
+			children.push(
+				createElement(
+					'p',
+					{ key: 'sandbox' },
+					createElement(
+						'strong',
+						null,
+						__( 'Mode test actif — aucun paiement réel ne sera effectué.', 'k-pay-for-woocommerce' )
+					)
+				)
+			);
+		}
+
+		children.push(
+			createElement(
+				'p',
+				{ key: 'redirect', className: 'wc-kpay-redirect-notice' },
+				settings.redirectNotice ||
+					__( 'Vous serez redirigé vers la page de paiement sécurisée K-Pay.', 'k-pay-for-woocommerce' )
+			)
+		);
+
+		return createElement( 'div', { className: 'wc-kpay-fields' }, children );
+	}
+
 	function KPayFields( props ) {
 		var eventRegistration = props.eventRegistration;
 		var emitResponse = props.emitResponse;
@@ -35,14 +76,14 @@
 				if ( ! provider ) {
 					return {
 						type: emitResponse.responseTypes.ERROR,
-						message: __( 'Veuillez sélectionner un opérateur.', 'wc-kpay-gateway' ),
+						message: __( 'Veuillez sélectionner un opérateur.', 'k-pay-for-woocommerce' ),
 					};
 				}
 
 				if ( ! phone || phone.replace( /\D/g, '' ).length < 8 ) {
 					return {
 						type: emitResponse.responseTypes.ERROR,
-						message: __( 'Veuillez saisir un numéro Mobile Money valide.', 'wc-kpay-gateway' ),
+						message: __( 'Veuillez saisir un numéro Mobile Money valide.', 'k-pay-for-woocommerce' ),
 					};
 				}
 
@@ -76,7 +117,7 @@
 					createElement(
 						'strong',
 						null,
-						__( 'Mode test actif — aucun paiement réel ne sera effectué.', 'wc-kpay-gateway' )
+						__( 'Mode test actif — aucun paiement réel ne sera effectué.', 'k-pay-for-woocommerce' )
 					)
 				)
 			);
@@ -92,7 +133,7 @@
 				createElement(
 					'label',
 					{ key: 'l', htmlFor: 'kpay_provider', className: 'wc-kpay-field__label' },
-					__( 'Opérateur', 'wc-kpay-gateway' )
+					__( 'Opérateur', 'k-pay-for-woocommerce' )
 				),
 				createElement(
 					'select',
@@ -117,7 +158,7 @@
 				createElement(
 					'label',
 					{ key: 'l', htmlFor: 'kpay_phone', className: 'wc-kpay-field__label' },
-					__( 'Numéro Mobile Money', 'wc-kpay-gateway' )
+					__( 'Numéro Mobile Money', 'k-pay-for-woocommerce' )
 				),
 				createElement( 'input', {
 					key: 'i',
@@ -126,7 +167,7 @@
 					type: 'tel',
 					autoComplete: 'tel',
 					value: phone,
-					placeholder: __( 'Ex : 6 70 00 00 01', 'wc-kpay-gateway' ),
+					placeholder: __( 'Ex : 6 70 00 00 01', 'k-pay-for-woocommerce' ),
 					onChange: function ( e ) {
 						setPhone( e.target.value );
 					},
@@ -165,10 +206,12 @@
 	registerPaymentMethod( {
 		name: 'kpay',
 		label: createElement( KPayLabel, null ),
-		content: createElement( KPayFields, null ),
+		content: createElement( isGateway ? KPayRedirectNotice : KPayFields, null ),
 		edit: createElement( 'div', null, label ),
 		canMakePayment: function () {
-			return providers.length > 0;
+			// En mode passerelle, la liste d'opérateurs est gérée par K-Pay :
+			// l'exiger ici masquerait la passerelle à tort.
+			return isGateway || providers.length > 0;
 		},
 		ariaLabel: label,
 		supports: {

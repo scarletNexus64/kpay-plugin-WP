@@ -48,9 +48,16 @@ post() {
 
 ORDER_ID="${1:?Usage: webhook-live-test.sh <order_id> [payment_id]}"
 PAYMENT_ID="${2:-pay_integration_test}"
+# Le montant doit couvrir le total de la commande, sans quoi la notification
+# est acceptée mais non appliquée. Ajustez-le si votre commande diffère.
+AMOUNT="${3:-5000}"
 
-BODY=$(printf '{"event":"payment.completed","paymentId":"%s","reference":"KPAY-IT-1","status":"COMPLETED","amount":5000,"externalId":"WC-%s-1","metadata":{"orderId":"%s"}}' \
-	"$PAYMENT_ID" "$ORDER_ID" "$ORDER_ID")
+# L'horodatage est obligatoire et borné à 10 minutes : il est généré à chaque
+# exécution, une valeur figée serait systématiquement hors fenêtre.
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+BODY=$(printf '{"event":"payment.completed","paymentId":"%s","reference":"KPAY-IT-1","status":"COMPLETED","amount":%s,"externalId":"WC-%s-1","metadata":{"orderId":"%s"},"timestamp":"%s"}' \
+	"$PAYMENT_ID" "$AMOUNT" "$ORDER_ID" "$ORDER_ID" "$NOW")
 VALID_SIG=$(sign "$BODY")
 
 echo ""
@@ -63,11 +70,17 @@ check_status "Corps modifié après signature" 401 \
 	"$(post "$(printf '%s' "$BODY" | sed 's/"amount":5000/"amount":1/')" "$VALID_SIG")"
 check_status "JSON malformé"             400 "$(post '{casse' "$(sign '{casse')")"
 
-UNKNOWN=$(printf '{"event":"payment.completed","paymentId":"pay_x","status":"COMPLETED","externalId":"WC-999999-1","metadata":{"orderId":"999999"}}')
+UNKNOWN=$(printf '{"event":"payment.completed","paymentId":"pay_x","status":"COMPLETED","externalId":"WC-999999-1","metadata":{"orderId":"999999"},"timestamp":"%s"}' "$NOW")
 check_status "Commande inconnue"         404 "$(post "$UNKNOWN" "$(sign "$UNKNOWN")")"
 
-MISMATCH=$(printf '{"event":"payment.completed","paymentId":"pay_autre_client","status":"COMPLETED","externalId":"WC-%s-1","metadata":{"orderId":"%s"}}' "$ORDER_ID" "$ORDER_ID")
+MISMATCH=$(printf '{"event":"payment.completed","paymentId":"pay_autre_client","status":"COMPLETED","externalId":"WC-%s-1","metadata":{"orderId":"%s"},"timestamp":"%s"}' "$ORDER_ID" "$ORDER_ID" "$NOW")
 check_status "Transaction d'une autre commande" 404 "$(post "$MISMATCH" "$(sign "$MISMATCH")")"
+
+NO_TS=$(printf '{"event":"payment.completed","paymentId":"%s","status":"COMPLETED","amount":%s,"externalId":"WC-%s-1","metadata":{"orderId":"%s"}}' "$PAYMENT_ID" "$AMOUNT" "$ORDER_ID" "$ORDER_ID")
+check_status "Sans horodatage"           400 "$(post "$NO_TS" "$(sign "$NO_TS")")"
+
+OLD=$(printf '{"event":"payment.completed","paymentId":"%s","status":"COMPLETED","amount":%s,"externalId":"WC-%s-1","metadata":{"orderId":"%s"},"timestamp":"2020-01-01T00:00:00Z"}' "$PAYMENT_ID" "$AMOUNT" "$ORDER_ID" "$ORDER_ID")
+check_status "Horodatage hors fenêtre"   401 "$(post "$OLD" "$(sign "$OLD")")"
 
 echo ""
 echo "=== Notification légitime ==="

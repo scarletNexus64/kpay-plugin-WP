@@ -22,10 +22,121 @@ class WC_KPay_Webhook {
 	 */
 	const MAX_WEBHOOK_AGE = 600;
 
+	/**
+	 * Durée de mémorisation d'une notification déjà traitée, en secondes.
+	 * Couvre largement la fenêtre anti-rejeu : au-delà, l'horodatage suffit.
+	 */
+	const REPLAY_CACHE_TTL = 900;
+
+	/**
+	 * Tolérance sur la comparaison des montants.
+	 *
+	 * Les devises sans décimales sont arrondies à l'initialisation ; comparer
+	 * au centime près produirait des faux positifs sur ces arrondis.
+	 */
+	const AMOUNT_TOLERANCE = 0.01;
+
+	/**
+	 * Intervalle minimal entre deux interrogations de l'API pour une même
+	 * commande, en secondes. Le client interroge toutes les 5 s ; on autorise
+	 * un appel réel toutes les 4 s pour absorber la dérive sans le bloquer.
+	 */
+	const POLL_THROTTLE = 4;
+
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_route' ) );
 		add_action( 'wp_ajax_kpay_check_status', array( __CLASS__, 'handle_status_check' ) );
 		add_action( 'wp_ajax_nopriv_kpay_check_status', array( __CLASS__, 'handle_status_check' ) );
+		// Retour de la passerelle hébergée, sur la page de confirmation.
+		add_action( 'template_redirect', array( __CLASS__, 'handle_gateway_return' ) );
+	}
+
+	/**
+	 * Retour du client depuis la page de paiement hébergée.
+	 *
+	 * La règle d'or de la spec : ne marquer payé qu'après une signature VALIDE
+	 * *et* un statut COMPLETED reconfirmé par l'API. Le `status` présent dans
+	 * l'URL n'est jamais cru sur parole — il est signé, mais la confirmation
+	 * serveur reste l'autorité.
+	 */
+	public static function handle_gateway_return() {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- authentifié par signature HMAC.
+		if ( empty( $_GET['kpay_return'] ) || empty( $_GET['order_id'] ) ) {
+			return;
+		}
+
+		$order_id = absint( $_GET['order_id'] );
+		$order    = wc_get_order( $order_id );
+		$key      = isset( $_GET['order_key'] ) ? sanitize_text_field( wp_unslash( $_GET['order_key'] ) ) : '';
+
+		if ( ! $order || ! $key || ! hash_equals( $order->get_order_key(), $key ) ) {
+			return;
+		}
+
+		$gateway = self::get_gateway();
+		if ( ! $gateway ) {
+			return;
+		}
+
+		if ( $order->is_paid() ) {
+			return;
+		}
+
+		$params = array();
+		foreach ( array( 'status', 'reference', 'externalId', 'ts', 'sig' ) as $field ) {
+			$params[ $field ] = isset( $_GET[ $field ] )
+				? sanitize_text_field( wp_unslash( $_GET[ $field ] ) )
+				: '';
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$verified = WC_KPay_API::verify_gateway_return( $params, $gateway->get_option( 'gateway_secret' ) );
+
+		if ( is_wp_error( $verified ) ) {
+			$gateway->log(
+				sprintf( 'Retour passerelle commande #%d refusé : %s', $order_id, $verified->get_error_message() ),
+				'error'
+			);
+			return;
+		}
+
+		// L'externalId signé doit désigner cette commande : sans ce contrôle,
+		// un retour authentique obtenu sur une commande à 100 XOF validerait
+		// n'importe quelle autre commande.
+		$stored_external = (string) $order->get_meta( '_kpay_external_id' );
+		if ( '' === $stored_external || ! hash_equals( $stored_external, $params['externalId'] ) ) {
+			$gateway->log(
+				sprintf( 'Retour passerelle : externalId « %s » ne correspond pas à la commande #%d.', $params['externalId'], $order_id ),
+				'error'
+			);
+			return;
+		}
+
+		$payment_id = $order->get_meta( '_kpay_payment_id' );
+		if ( ! $payment_id ) {
+			return;
+		}
+
+		$environment = $order->get_meta( '_kpay_environment' );
+		if ( ! $environment ) {
+			return;
+		}
+
+		// Confirmation serveur : c'est elle, et non l'URL, qui fait autorité.
+		$payment = $gateway->get_api( $environment )->get_payment( $payment_id );
+
+		if ( is_wp_error( $payment ) ) {
+			$gateway->log(
+				sprintf( 'Retour passerelle commande #%d : statut non confirmé (%s).', $order_id, $payment->get_error_message() ),
+				'error'
+			);
+			return;
+		}
+
+		$status = isset( $payment['status'] ) ? strtoupper( sanitize_text_field( $payment['status'] ) ) : '';
+		$amount = isset( $payment['amount'] ) ? $payment['amount'] : null;
+
+		self::apply_status( $order, $status, 'retour passerelle', $gateway, $amount );
 	}
 
 	/**
@@ -91,24 +202,57 @@ class WC_KPay_Webhook {
 			return new WP_REST_Response( array( 'message' => 'Invalid payload.' ), 400 );
 		}
 
+		// Seuls les événements de dépôt pilotent le statut d'une commande.
+		// Les familles payout.* (retraits) et refund.* (remboursements)
+		// partagent le même secret et le même champ `status` : sans ce filtre,
+		// un refund.completed rejoué marquerait la commande payée.
+		$event = isset( $payload['event'] ) ? sanitize_text_field( (string) $payload['event'] ) : '';
+		if ( '' !== $event && 0 !== strpos( $event, 'payment.' ) ) {
+			$gateway->log( sprintf( 'Webhook ignoré : événement « %s » hors périmètre paiement.', $event ) );
+			// 200 : la notification est valide, simplement hors périmètre.
+			// Une 4xx pousserait K-Pay à la considérer en échec.
+			return new WP_REST_Response( array( 'received' => true, 'ignored' => true ), 200 );
+		}
+
 		// Anti-rejeu (spec) : une notification signée mais ancienne est
 		// rejetée. Sans cette fenêtre, un webhook FAILED capturé pourrait être
 		// rejoué plus tard contre une nouvelle tentative sur la même commande.
-		if ( ! empty( $payload['timestamp'] ) ) {
-			$sent = strtotime( (string) $payload['timestamp'] );
+		// L'horodatage est exigé : le traiter en optionnel ferait disparaître
+		// la protection sans bruit le jour où le champ manque.
+		if ( empty( $payload['timestamp'] ) ) {
+			$gateway->log( 'Webhook sans horodatage : rejeté (anti-rejeu).', 'error' );
+			return new WP_REST_Response( array( 'message' => 'Missing timestamp.' ), 400 );
+		}
 
-			if ( false === $sent ) {
-				$gateway->log( 'Webhook : horodatage illisible, rejeté.', 'error' );
-				return new WP_REST_Response( array( 'message' => 'Invalid timestamp.' ), 400 );
-			}
+		$sent = strtotime( (string) $payload['timestamp'] );
 
-			if ( abs( time() - $sent ) > self::MAX_WEBHOOK_AGE ) {
-				$gateway->log(
-					sprintf( 'Webhook rejeté : horodatage hors fenêtre (%s).', $payload['timestamp'] ),
-					'error'
-				);
-				return new WP_REST_Response( array( 'message' => 'Timestamp outside accepted window.' ), 401 );
-			}
+		if ( false === $sent ) {
+			$gateway->log( 'Webhook : horodatage illisible, rejeté.', 'error' );
+			return new WP_REST_Response( array( 'message' => 'Invalid timestamp.' ), 400 );
+		}
+
+		if ( abs( time() - $sent ) > self::MAX_WEBHOOK_AGE ) {
+			$gateway->log(
+				sprintf( 'Webhook rejeté : horodatage hors fenêtre (%s).', $payload['timestamp'] ),
+				'error'
+			);
+			return new WP_REST_Response( array( 'message' => 'Timestamp outside accepted window.' ), 401 );
+		}
+
+		// Déduplication : à l'intérieur de la fenêtre anti-rejeu, une même
+		// notification signée peut être rejouée. L'idempotence de apply_status
+		// couvre le cas COMPLETED, mais pas un FAILED rejoué contre une
+		// nouvelle tentative encore en attente sur la même commande.
+		//
+		// La marque n'est posée qu'une fois la notification réellement
+		// appliquée (plus bas) : les chemins qui demandent un réessai à K-Pay
+		// (commande pas encore enregistrée, passerelle indisponible) doivent
+		// pouvoir être rejoués, sans quoi une notification légitime serait
+		// définitivement perdue.
+		$replay_key = 'kpay_wh_' . md5( $raw );
+		if ( false !== get_transient( $replay_key ) ) {
+			$gateway->log( 'Webhook déjà traité : ignoré (rejeu).' );
+			return new WP_REST_Response( array( 'received' => true, 'duplicate' => true ), 200 );
 		}
 
 		$order = self::locate_order( $payload );
@@ -142,8 +286,13 @@ class WC_KPay_Webhook {
 			return new WP_REST_Response( array( 'message' => 'Payment mismatch.' ), 404 );
 		}
 
+		// Tous les contrôles sont passés : la notification va être appliquée,
+		// on peut la marquer comme traitée pour neutraliser un rejeu.
+		set_transient( $replay_key, 1, self::REPLAY_CACHE_TTL );
+
 		$status = isset( $payload['status'] ) ? strtoupper( sanitize_text_field( $payload['status'] ) ) : '';
-		self::apply_status( $order, $status, 'webhook', $gateway );
+		$amount = isset( $payload['amount'] ) ? $payload['amount'] : null;
+		self::apply_status( $order, $status, 'webhook', $gateway, $amount );
 
 		return new WP_REST_Response( array( 'received' => true ), 200 );
 	}
@@ -196,16 +345,47 @@ class WC_KPay_Webhook {
 
 	/**
 	 * Applique un statut K-Pay à la commande, de façon idempotente.
+	 *
+	 * @param float|string|null $paid_amount Montant réellement encaissé, tel
+	 *                                       que rapporté par K-Pay. Null si la
+	 *                                       source ne le fournit pas.
 	 */
-	private static function apply_status( WC_Order $order, $status, $source, $gateway ) {
+	private static function apply_status( WC_Order $order, $status, $source, $gateway, $paid_amount = null ) {
 		if ( 'COMPLETED' === $status ) {
 			if ( $order->is_paid() ) {
 				return;
 			}
+
+			// Le montant encaissé doit couvrir le total de la commande. Sans
+			// ce contrôle, une confirmation portant sur un montant inférieur
+			// (panier modifié après l'initiation, paiement d'une tentative
+			// antérieure moins chère) validerait la commande au prix fort.
+			if ( null !== $paid_amount && ! self::amount_covers_order( $order, $paid_amount ) ) {
+				$expected = (float) $order->get_total();
+				$order->add_order_note( sprintf(
+					/* translators: 1: montant reçu, 2: montant attendu, 3: source */
+					__( 'Paiement K-Pay incohérent : %1$s reçu pour %2$s attendu (%3$s). Commande laissée en attente pour vérification manuelle.', 'k-pay-for-woocommerce' ),
+					(float) $paid_amount,
+					$expected,
+					$source
+				) );
+				$gateway->log(
+					sprintf(
+						'Commande #%d : montant insuffisant (%s reçu / %s attendu, %s). Paiement NON validé.',
+						$order->get_id(),
+						(float) $paid_amount,
+						$expected,
+						$source
+					),
+					'error'
+				);
+				return;
+			}
+
 			$payment_id = $order->get_meta( '_kpay_payment_id' );
 			$order->add_order_note( sprintf(
 				/* translators: 1: source de la confirmation, 2: identifiant K-Pay */
-				__( 'Paiement K-Pay confirmé (%1$s), transaction %2$s.', 'wc-kpay-gateway' ),
+				__( 'Paiement K-Pay confirmé (%1$s), transaction %2$s.', 'k-pay-for-woocommerce' ),
 				$source,
 				$payment_id
 			) );
@@ -220,12 +400,31 @@ class WC_KPay_Webhook {
 			}
 			$order->update_status( 'failed', sprintf(
 				/* translators: 1: statut, 2: source */
-				__( 'Paiement K-Pay %1$s (%2$s).', 'wc-kpay-gateway' ),
+				__( 'Paiement K-Pay %1$s (%2$s).', 'k-pay-for-woocommerce' ),
 				$status,
 				$source
 			) );
 			$gateway->log( sprintf( 'Commande #%d en échec : %s (%s).', $order->get_id(), $status, $source ) );
 		}
+	}
+
+	/**
+	 * Le montant encaissé couvre-t-il le total de la commande ?
+	 *
+	 * La comparaison se fait contre le montant réellement demandé à K-Pay :
+	 * pour les devises sans décimales, process_payment() arrondit le total
+	 * avant l'appel, et K-Pay confirme donc ce montant arrondi — comparer au
+	 * total brut rejetterait à tort un paiement légitime.
+	 */
+	private static function amount_covers_order( WC_Order $order, $paid_amount ) {
+		$expected = (float) $order->get_total();
+		$provider = (string) $order->get_meta( '_kpay_provider' );
+
+		if ( $provider && WC_KPay_API::provider_uses_integer_amount( $provider ) ) {
+			$expected = (float) (int) round( $expected );
+		}
+
+		return (float) $paid_amount + self::AMOUNT_TOLERANCE >= $expected;
 	}
 
 	/**
@@ -237,19 +436,18 @@ class WC_KPay_Webhook {
 		$nonce    = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
 
 		if ( ! $order_id || ! wp_verify_nonce( $nonce, 'kpay_status_' . $order_id ) ) {
-			wp_send_json_error( array( 'message' => __( 'Requête invalide.', 'wc-kpay-gateway' ) ), 403 );
-		}
-
-		$order = wc_get_order( $order_id );
-		if ( ! $order ) {
-			wp_send_json_error( array( 'message' => __( 'Commande introuvable.', 'wc-kpay-gateway' ) ), 404 );
+			wp_send_json_error( array( 'message' => __( 'Requête invalide.', 'k-pay-for-woocommerce' ) ), 403 );
 		}
 
 		// Le nonce seul ne prouve pas la propriété de la commande : on vérifie
 		// la clé de commande, comme WooCommerce le fait sur la page de reçu.
-		$key = isset( $_POST['order_key'] ) ? sanitize_text_field( wp_unslash( $_POST['order_key'] ) ) : '';
-		if ( ! $key || ! hash_equals( $order->get_order_key(), $key ) ) {
-			wp_send_json_error( array( 'message' => __( 'Requête invalide.', 'wc-kpay-gateway' ) ), 403 );
+		// Une commande absente et une clé invalide renvoient la même réponse :
+		// distinguer les deux permettrait d'énumérer les commandes existantes.
+		$order = wc_get_order( $order_id );
+		$key   = isset( $_POST['order_key'] ) ? sanitize_text_field( wp_unslash( $_POST['order_key'] ) ) : '';
+
+		if ( ! $order || ! $key || ! hash_equals( $order->get_order_key(), $key ) ) {
+			wp_send_json_error( array( 'message' => __( 'Requête invalide.', 'k-pay-for-woocommerce' ) ), 403 );
 		}
 
 		if ( $order->is_paid() ) {
@@ -261,12 +459,12 @@ class WC_KPay_Webhook {
 
 		$payment_id = $order->get_meta( '_kpay_payment_id' );
 		if ( ! $payment_id ) {
-			wp_send_json_error( array( 'message' => __( 'Aucune transaction associée.', 'wc-kpay-gateway' ) ), 404 );
+			wp_send_json_error( array( 'message' => __( 'Aucune transaction associée.', 'k-pay-for-woocommerce' ) ), 404 );
 		}
 
 		$gateway = self::get_gateway();
 		if ( ! $gateway ) {
-			wp_send_json_error( array( 'message' => __( 'Passerelle indisponible.', 'wc-kpay-gateway' ) ), 503 );
+			wp_send_json_error( array( 'message' => __( 'Passerelle indisponible.', 'k-pay-for-woocommerce' ) ), 503 );
 		}
 
 		// Sans environnement enregistré, on ne devine pas : interroger avec les
@@ -278,8 +476,18 @@ class WC_KPay_Webhook {
 				sprintf( 'Polling commande #%d : environnement inconnu, statut indéterminable.', $order_id ),
 				'error'
 			);
-			wp_send_json_error( array( 'message' => __( 'Statut indisponible pour cette commande.', 'wc-kpay-gateway' ) ), 409 );
+			wp_send_json_error( array( 'message' => __( 'Statut indisponible pour cette commande.', 'k-pay-for-woocommerce' ) ), 409 );
 		}
+
+		// Throttling : chaque appel valide déclenche une requête sortante vers
+		// K-Pay, dont le quota est de 100/minute pour toute la boutique. Sans
+		// cette limite, une boucle sur une seule commande épuiserait le quota
+		// et casserait le polling de toutes les autres.
+		$throttle_key = 'kpay_poll_' . $order_id;
+		if ( false !== get_transient( $throttle_key ) ) {
+			wp_send_json_success( array( 'status' => 'PENDING' ) );
+		}
+		set_transient( $throttle_key, 1, self::POLL_THROTTLE );
 
 		$payment = $gateway->get_api( $environment )->get_payment( $payment_id );
 
@@ -289,7 +497,8 @@ class WC_KPay_Webhook {
 		}
 
 		$status = isset( $payment['status'] ) ? strtoupper( sanitize_text_field( $payment['status'] ) ) : 'PENDING';
-		self::apply_status( $order, $status, 'polling', $gateway );
+		$amount = isset( $payment['amount'] ) ? $payment['amount'] : null;
+		self::apply_status( $order, $status, 'polling', $gateway, $amount );
 
 		wp_send_json_success( array( 'status' => $status ) );
 	}

@@ -1,13 +1,14 @@
 <?php
 /**
- * Plugin Name: K-Pay Gateway
+ * Plugin Name: K-Pay for WooCommerce
  * Plugin URI: https://kpay.site
  * Description: Passerelle de paiement Mobile Money (MTN MoMo, Orange Money) via K-Pay. Supporte le Cameroun et 11 autres pays africains.
- * Version: 2.0.0
- * Author: Tokam Julie
+ * Version: 2.1.0
+ * Author: Steve Boussa
+ * Author URI: https://profiles.wordpress.org/steveboussa/
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: wc-kpay-gateway
+ * Text Domain: k-pay-for-woocommerce
  * Domain Path: /languages
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -19,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WC_KPAY_VERSION', '2.0.0' );
+define( 'WC_KPAY_VERSION', '2.1.0' );
 define( 'WC_KPAY_PLUGIN_FILE', __FILE__ );
 define( 'WC_KPAY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_KPAY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -64,6 +65,41 @@ add_action( 'before_woocommerce_init', function () {
 } );
 
 /**
+ * Langue choisie dans les réglages de la passerelle, ou '' pour suivre le site.
+ *
+ * Les réglages sont lus directement en base : la passerelle n'est instanciée
+ * qu'une fois WooCommerce chargé, bien après le filtre de locale.
+ */
+function wc_kpay_configured_locale() {
+	$settings = get_option( 'woocommerce_kpay_settings', array() );
+
+	if ( ! is_array( $settings ) || empty( $settings['language'] ) || 'site' === $settings['language'] ) {
+		return '';
+	}
+
+	// Liste blanche : la valeur sert à composer un nom de fichier .mo.
+	$allowed = array( 'fr_FR', 'en_US' );
+
+	return in_array( $settings['language'], $allowed, true ) ? $settings['language'] : '';
+}
+
+/**
+ * Force la locale du plugin quand le marchand en a choisi une.
+ *
+ * Le filtre est restreint à notre domaine : le reste du site, WooCommerce
+ * inclus, garde la langue de WordPress.
+ */
+add_filter( 'plugin_locale', function ( $locale, $domain ) {
+	if ( 'k-pay-for-woocommerce' !== $domain ) {
+		return $locale;
+	}
+
+	$configured = wc_kpay_configured_locale();
+
+	return $configured ? $configured : $locale;
+}, 10, 2 );
+
+/**
  * Chargement des traductions.
  *
  * L'interface est en français ; ce chargement permet de la traduire sans
@@ -71,7 +107,7 @@ add_action( 'before_woocommerce_init', function () {
  */
 add_action( 'init', function () {
 	load_plugin_textdomain(
-		'wc-kpay-gateway',
+		'k-pay-for-woocommerce',
 		false,
 		dirname( plugin_basename( WC_KPAY_PLUGIN_FILE ) ) . '/languages'
 	);
@@ -85,7 +121,7 @@ add_action( 'admin_notices', function () {
 		return;
 	}
 	echo '<div class="notice notice-error"><p>';
-	esc_html_e( 'K-Pay Gateway nécessite WooCommerce actif pour fonctionner.', 'wc-kpay-gateway' );
+	esc_html_e( 'K-Pay Gateway nécessite WooCommerce actif pour fonctionner.', 'k-pay-for-woocommerce' );
 	echo '</p></div>';
 } );
 
@@ -102,11 +138,6 @@ add_action( 'plugins_loaded', function () {
 	require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-webhook.php';
 
 	WC_KPay_Webhook::init();
-
-	if ( is_admin() ) {
-		require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-admin.php';
-		WC_KPay_Admin::init();
-	}
 
 	add_filter( 'woocommerce_payment_gateways', function ( $gateways ) {
 		$gateways[] = 'WC_KPay_Gateway';
@@ -139,6 +170,6 @@ add_action( 'woocommerce_blocks_loaded', function () {
  */
 add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), function ( $links ) {
 	$url = admin_url( 'admin.php?page=wc-settings&tab=checkout&section=kpay' );
-	array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Réglages', 'wc-kpay-gateway' ) . '</a>' );
+	array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Réglages', 'k-pay-for-woocommerce' ) . '</a>' );
 	return $links;
 } );

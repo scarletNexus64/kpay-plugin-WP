@@ -30,93 +30,6 @@ final class SecurityHardeningTest extends TestCase {
 	}
 
 	// ---------------------------------------------------------------
-	// Le contrôle de solde doit échouer fermé
-	// ---------------------------------------------------------------
-
-	private function post_withdrawal( array $overrides = array() ) {
-		$_POST = array_merge( array(
-			'_wpnonce'        => wp_create_nonce( 'kpay_withdraw' ),
-			'wallet_currency' => 'XAF',
-			'provider'        => 'MTN_MOMO_CMR',
-			'phone'           => '237653456789',
-			'amount'          => '5000',
-			'confirm'         => '1',
-		), $overrides );
-	}
-
-	private function submit() {
-		try {
-			WC_KPay_Admin::handle_withdrawal();
-		} catch ( KPay_Test_Redirect $r ) {
-			return get_transient( 'kpay_admin_notice_1' );
-		}
-		$this->fail( 'Aucune redirection.' );
-	}
-
-	/**
-	 * Panne de l'API de solde : le retrait doit être annulé, pas envoyé
-	 * sans vérification.
-	 */
-	public function test_balance_api_failure_blocks_withdrawal(): void {
-		$this->post_withdrawal();
-		kpay_test_queue_error( 'timeout' );
-
-		$notice = $this->submit();
-
-		$this->assertSame( 'error', $notice['type'] );
-		$this->assertStringContainsString( 'annulé', $notice['message'] );
-		// Un seul appel : le solde. Le retrait n'est jamais parti.
-		$this->assertCount( 1, $GLOBALS['kpay_test_http_requests'] );
-	}
-
-	public function test_balance_api_error_response_blocks_withdrawal(): void {
-		$this->post_withdrawal();
-		kpay_test_queue_response( 500, array( 'statusCode' => 500, 'message' => 'Server error' ) );
-
-		$notice = $this->submit();
-
-		$this->assertSame( 'error', $notice['type'] );
-		$this->assertCount( 1, $GLOBALS['kpay_test_http_requests'], 'Aucun retrait sans solde vérifié.' );
-	}
-
-	/**
-	 * Wallet inexistant : sans correspondance, aucun contrôle ne s'appliquait
-	 * et le retrait passait. Il doit désormais être refusé.
-	 */
-	public function test_nonexistent_wallet_blocks_withdrawal(): void {
-		$this->post_withdrawal( array( 'wallet_currency' => 'KES' ) );
-
-		// Le compte ne détient qu'un wallet XAF.
-		kpay_test_queue_response( 200, array(
-			array( 'currency' => 'XAF', 'balance' => 150000, 'reservedBalance' => 0, 'availableBalance' => 125000 ),
-		) );
-
-		$notice = $this->submit();
-
-		$this->assertSame( 'error', $notice['type'] );
-		$this->assertStringContainsString( 'KES', $notice['message'] );
-		$this->assertCount( 1, $GLOBALS['kpay_test_http_requests'] );
-	}
-
-	/** Le cas nominal doit continuer de fonctionner. */
-	public function test_valid_withdrawal_still_passes(): void {
-		$this->post_withdrawal();
-
-		kpay_test_queue_response( 200, array(
-			array( 'currency' => 'XAF', 'balance' => 150000, 'reservedBalance' => 0, 'availableBalance' => 125000 ),
-		) );
-		kpay_test_queue_response( 201, array(
-			'id' => 'wdr_1', 'reference' => 'KPAY-WD-1', 'status' => 'PENDING',
-			'amount' => 5000, 'netAmount' => 4750, 'currency' => 'XAF',
-		) );
-
-		$notice = $this->submit();
-
-		$this->assertSame( 'success', $notice['type'] );
-		$this->assertCount( 2, $GLOBALS['kpay_test_http_requests'] );
-	}
-
-	// ---------------------------------------------------------------
 	// Anti-rejeu du webhook
 	// ---------------------------------------------------------------
 
@@ -219,8 +132,11 @@ final class SecurityHardeningTest extends TestCase {
 		$this->assertFalse( $order->is_paid() );
 	}
 
-	/** Sans horodatage, la signature reste la protection principale. */
-	public function test_missing_timestamp_still_verifies_signature(): void {
+	/**
+	 * L'horodatage est obligatoire : traité en optionnel, l'anti-rejeu
+	 * disparaîtrait sans bruit le jour où le champ viendrait à manquer.
+	 */
+	public function test_missing_timestamp_is_rejected(): void {
 		$order = $this->pending_order();
 
 		$body = json_encode( array(
@@ -230,7 +146,8 @@ final class SecurityHardeningTest extends TestCase {
 			'metadata'  => array( 'orderId' => '42' ),
 		) );
 
-		$this->assertSame( 200, $this->send( $body )->get_status() );
+		$this->assertSame( 400, $this->send( $body )->get_status() );
+		$this->assertFalse( $order->is_paid(), 'Un webhook sans horodatage ne doit pas payer la commande.' );
 
 		// Mais une signature invalide reste refusée.
 		$order2 = kpay_test_add_order( new WC_Order( 43 ) );
@@ -240,39 +157,4 @@ final class SecurityHardeningTest extends TestCase {
 		$this->assertSame( 401, $response->get_status() );
 	}
 
-	// ---------------------------------------------------------------
-	// Historique tolérant aux lignes anciennes
-	// ---------------------------------------------------------------
-
-	/**
-	 * Une ligne écrite par une version antérieure ne doit pas produire
-	 * d'avertissement PHP à l'affichage.
-	 */
-	public function test_history_row_missing_keys_does_not_warn(): void {
-		$GLOBALS['kpay_test_options']['kpay_withdrawal_history_sandbox'] = array(
-			array( 'id' => 'wdr_ancien', 'reference' => 'REF-ANCIENNE' ), // ligne incomplète
-		);
-
-		// La page interroge les soldes avant d'afficher l'historique.
-		kpay_test_queue_response( 200, array(
-			array( 'currency' => 'XAF', 'balance' => 1000, 'reservedBalance' => 0, 'availableBalance' => 1000 ),
-		) );
-
-		$errors = array();
-		set_error_handler( function ( $no, $str ) use ( &$errors ) {
-			$errors[] = $str;
-			return true;
-		} );
-
-		ob_start();
-		WC_KPay_Admin::render_payouts_page();
-		$html = ob_get_clean();
-
-		restore_error_handler();
-
-		$this->assertEmpty( $errors, 'Aucun avertissement PHP attendu : ' . implode( ' | ', $errors ) );
-		$this->assertStringContainsString( 'REF-ANCIENNE', $html, 'La ligne incomplète doit tout de même s\'afficher.' );
-		// Les champs manquants sont remplacés par un tiret, pas par du vide.
-		$this->assertStringContainsString( '—', $html );
-	}
 }

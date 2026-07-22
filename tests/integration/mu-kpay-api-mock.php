@@ -1,15 +1,13 @@
 <?php
 /**
  * Plugin Name: K-Pay — simulateur d'API (TESTS UNIQUEMENT)
- * Description: Intercepte les appels HTTP vers admin.kpay.site et renvoie des réponses conformes à la spec. Permet de tester le menu K-Pay sans clés réelles et sans jamais transférer d'argent.
+ * Description: Intercepte les appels HTTP vers admin.kpay.site et renvoie des réponses conformes à la spec. Permet de tester les deux modes de paiement sans clés réelles.
  *
  * À NE JAMAIS DÉPLOYER EN PRODUCTION.
  *
- * Le comportement des retraits suit les numéros de test de la spec :
- *   237653456789 -> COMPLETED
- *   237653456129 -> SUBMITTED (reste en attente)
- *   237653456089 -> FAILED / RECIPIENT_NOT_FOUND
- *   237653456119 -> FAILED / UNSPECIFIED_FAILURE
+ * Options de pilotage (via wp option update) :
+ *   kpay_mock_status      Statut renvoyé par GET /payments/:id (PENDING par défaut).
+ *   kpay_mock_paid_amount Force le montant renvoyé, pour simuler un sous-paiement.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -40,27 +38,29 @@ function kpay_mock_http( $preempt, $args, $url ) {
 		) );
 	}
 
-	if ( '/api/v1/payments/balance' === $path ) {
-		return kpay_mock_response( 200, get_option( 'kpay_mock_balances', array(
-			array( 'currency' => 'XAF', 'balance' => 150000, 'reservedBalance' => 25000, 'availableBalance' => 125000 ),
-			array( 'currency' => 'XOF', 'balance' => 80000, 'reservedBalance' => 0, 'availableBalance' => 80000 ),
-			array( 'currency' => 'KES', 'balance' => 12500.75, 'reservedBalance' => 500.25, 'availableBalance' => 12000.50 ),
-		) ) );
-	}
-
-	if ( '/api/v1/payments/withdraw' === $path && 'POST' === $method ) {
-		return kpay_mock_withdraw( $body );
-	}
-
 	if ( '/api/v1/payments/init' === $path && 'POST' === $method ) {
-		return kpay_mock_response( 201, array(
-			'id'        => 'pay_' . substr( md5( wp_json_encode( $body ) ), 0, 8 ),
-			'reference' => 'KPAY-TEST-' . strtoupper( substr( md5( microtime() ), 0, 6 ) ),
-			'status'    => 'PENDING',
-			'amount'    => isset( $body['amount'] ) ? $body['amount'] : 0,
-			'currency'  => 'XAF',
-			'isTest'    => true,
-		) );
+		return kpay_mock_init( $body );
+	}
+
+	// Statut d'un paiement : sert au polling et à la confirmation du retour
+	// passerelle. Le statut simulé est piloté par l'option kpay_mock_status.
+	if ( preg_match( '#^/api/v1/payments/(pay_[A-Za-z0-9]+)$#', (string) $path, $m ) ) {
+		$payments = get_option( 'kpay_mock_payments', array() );
+		$payment  = isset( $payments[ $m[1] ] ) ? $payments[ $m[1] ] : array(
+			'id'       => $m[1],
+			'amount'   => 0,
+			'currency' => 'XAF',
+		);
+
+		$payment['status'] = get_option( 'kpay_mock_status', 'PENDING' );
+
+		// Permet de simuler un sous-paiement sans toucher au reste.
+		$forced = get_option( 'kpay_mock_paid_amount', '' );
+		if ( '' !== $forced ) {
+			$payment['amount'] = (float) $forced;
+		}
+
+		return kpay_mock_response( 200, $payment );
 	}
 
 	return kpay_mock_response( 404, array(
@@ -71,79 +71,64 @@ function kpay_mock_http( $preempt, $args, $url ) {
 }
 
 /**
- * Retrait : l'issue dépend du numéro, comme en sandbox réel.
+ * Initialisation d'un paiement.
+ *
+ * Le mode est déduit de la forme du corps, exactement comme le fait l'API :
+ * un phoneNumber signale l'USSD, un returnUrl la passerelle hébergée. Un
+ * corps qui mélange les deux contrats est refusé par un 400, afin que le
+ * plugin soit testé contre le vrai comportement de l'API.
  */
-function kpay_mock_withdraw( $body ) {
-	$phone  = isset( $body['phoneNumber'] ) ? $body['phoneNumber'] : '';
-	$amount = isset( $body['amount'] ) ? (float) $body['amount'] : 0;
+function kpay_mock_init( $body ) {
+	$has_phone  = ! empty( $body['phoneNumber'] );
+	$has_return = ! empty( $body['returnUrl'] );
 
-	$balances = get_option( 'kpay_mock_balances', array(
-		array( 'currency' => 'XAF', 'balance' => 150000, 'reservedBalance' => 25000, 'availableBalance' => 125000 ),
-	) );
-
-	// Solde insuffisant -> 422 (spec).
-	$available = 0;
-	foreach ( $balances as $b ) {
-		if ( 'XAF' === $b['currency'] ) {
-			$available = $b['availableBalance'];
-		}
-	}
-	if ( $amount > $available ) {
-		return kpay_mock_response( 422, array(
-			'statusCode' => 422,
-			'message'    => 'Insufficient wallet balance',
-			'error'      => 'Unprocessable Entity',
+	if ( $has_phone && $has_return ) {
+		return kpay_mock_response( 400, array(
+			'statusCode' => 400,
+			'message'    => 'phoneNumber et returnUrl sont mutuellement exclusifs.',
+			'error'      => 'Bad Request',
 		) );
 	}
 
-	// Numéros d'échec de la spec (retraits).
-	$failures = array(
-		'237653456089' => 'RECIPIENT_NOT_FOUND',
-		'237653456119' => 'UNSPECIFIED_FAILURE',
-		'22951345089'  => 'RECIPIENT_NOT_FOUND',
-		'24174345088'  => 'RECIPIENT_NOT_FOUND',
-		'254703456099' => 'WALLET_LIMIT_REACHED',
-		'254703456109' => 'RECIPIENT_LIMIT_REACHED',
-	);
-
-	$fee = round( $amount * 0.05 );
-	$id  = 'wdr_' . substr( md5( $phone . microtime() ), 0, 8 );
-	$ref = 'KPAY-WD-' . strtoupper( substr( md5( microtime() ), 0, 6 ) );
-
-	$status         = 'PENDING';
-	$failure_reason = null;
-
-	if ( isset( $failures[ $phone ] ) ) {
-		$status         = 'FAILED';
-		$failure_reason = $failures[ $phone ];
-	} elseif ( '237653456129' === $phone ) {
-		$status = 'PENDING'; // SUBMITTED : reste en attente
+	if ( ! $has_phone && ! $has_return ) {
+		return kpay_mock_response( 400, array(
+			'statusCode' => 400,
+			'message'    => 'phoneNumber (USSD) ou returnUrl (GATEWAY) est requis.',
+			'error'      => 'Bad Request',
+		) );
 	}
 
-	$response = array(
-		'id'            => $id,
-		'reference'     => $ref,
-		'status'        => $status,
-		'amount'        => $amount,
-		'netAmount'     => $amount - $fee,
-		'feeAmount'     => $fee,
-		'currency'      => 'XAF',
-		'externalId'    => isset( $body['externalId'] ) ? $body['externalId'] : '',
-		'provider'      => isset( $body['provider'] ) ? $body['provider'] : '',
-		'phoneNumber'   => $phone,
-		'isTest'        => true,
-		'failureReason' => $failure_reason,
+	$amount = isset( $body['amount'] ) ? $body['amount'] : 0;
+	$id     = 'pay_' . substr( md5( wp_json_encode( $body ) . microtime() ), 0, 8 );
+	$ref    = 'KPAY-TEST-' . strtoupper( substr( md5( microtime() ), 0, 6 ) );
+
+	$payment = array(
+		'id'         => $id,
+		'reference'  => $ref,
+		'status'     => 'PENDING',
+		'amount'     => $amount,
+		'currency'   => 'XAF',
+		'externalId' => isset( $body['externalId'] ) ? $body['externalId'] : '',
+		'isTest'     => true,
 	);
 
-	// Payout cross-devise : la spec ajoute ces champs.
-	if ( isset( $body['sourceCountry'] ) && isset( $body['provider'] )
-		&& false !== strpos( $body['provider'], '_CIV' ) ) {
-		$response['payoutCurrency'] = 'XOF';
-		$response['payoutAmount']   = round( ( $amount - $fee ) * 1.015, 2 );
-		$response['exchangeRate']   = 1.015;
+	// Mémorisé pour que GET /payments/:id réponde de façon cohérente.
+	$payments        = get_option( 'kpay_mock_payments', array() );
+	$payments[ $id ] = $payment;
+	update_option( 'kpay_mock_payments', $payments, false );
+
+	if ( $has_return ) {
+		$payment['mode']       = 'GATEWAY';
+		$payment['gatewayUrl'] = 'http://localhost:8888/kpay-tests/fake-gateway.php?payment=' . $id
+			. '&return=' . rawurlencode( $body['returnUrl'] );
+		$payment['expiresAt']  = gmdate( 'c', time() + 1800 );
+	} else {
+		$payment['provider']    = isset( $body['provider'] ) ? $body['provider'] : '';
+		$payment['phoneNumber'] = $body['phoneNumber'];
+		$payment['message']     = 'Paiement initié. Le client doit valider la demande sur son téléphone.';
 	}
 
-	return kpay_mock_response( 201, $response );
+	return kpay_mock_response( 201, $payment );
 }
 
 function kpay_mock_response( $code, array $body ) {

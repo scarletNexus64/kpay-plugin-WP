@@ -20,13 +20,25 @@
 			],
 		};
 
+		/**
+		 * Un champ de type "title" est rendu par WooCommerce en <h3> suivi d'un
+		 * <p> de description, tous deux hors du tableau. Masquer le seul <h3>
+		 * laisse la description orpheline sous la section précédente.
+		 */
+		function toggleSection( id, visible ) {
+			var $heading = $( '#' + id ).closest( 'h3' );
+
+			$heading.toggle( visible );
+
+			// La description suit immédiatement le titre, avant le tableau.
+			$heading.nextUntil( 'table, h3' ).filter( 'p' ).toggle( visible );
+		}
+
 		function toggle() {
 			var isSandbox = $environment.val() === 'sandbox';
 
-			// Les champs "title" sont rendus en <h3> + <p>, hors du tableau :
-			// on masque l'en-tête et sa description avec les lignes associées.
-			$( '#woocommerce_kpay_sandbox_section' ).closest( 'h3, table' ).toggle( isSandbox );
-			$( '#woocommerce_kpay_live_section' ).closest( 'h3, table' ).toggle( ! isSandbox );
+			toggleSection( 'woocommerce_kpay_sandbox_section', isSandbox );
+			toggleSection( 'woocommerce_kpay_live_section', ! isSandbox );
 
 			$.each( sections.sandbox, function ( i, selector ) {
 				$( selector ).closest( 'tr' ).toggle( isSandbox );

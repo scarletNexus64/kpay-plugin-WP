@@ -1,4 +1,4 @@
-# Tests — K-Pay Gateway
+# Tests — K-Pay for WooCommerce
 
 **Ce dossier ne s'installe pas sur un site.** Il sert au développement du
 plugin. Pour installer K-Pay, seul `wc-kpay-gateway/` compte — voir le
@@ -15,7 +15,7 @@ Exercent le vrai code du plugin ; seules les fonctions WordPress sont simulées.
 ```bash
 cd tests
 composer install
-./vendor/bin/phpunit            # 125 tests
+./vendor/bin/phpunit            # 185 tests
 ./vendor/bin/phpunit --testdox  # détail lisible
 ```
 
@@ -31,8 +31,9 @@ Couverture par fichier :
 | `BrandingTest` | Logo, avertissements d'administration |
 | `AssetsTest` | Présence des fichiers, styles, markup des blocs |
 | `EnvironmentTest` | Bascule Sandbox/Live : sélection des clés, URL identique, validation des préfixes, clés du mauvais environnement, bandeau |
-| `PayoutTest` | Endpoints solde/retrait, numéros de test des 12 pays, correspondance pays/devise, payout cross-devise |
-| `PayoutFormTest` | Garde-fous du retrait : confirmation, nonce, capacité, numéro, minimum, solde, unicité de l'`externalId` |
+| `WebhookAmountTest` | Montant encaissé comparé au total (sous-paiement refusé, arrondi des devises entières), périmètre des événements (`refund.*` et `payout.*` ignorés), déduplication des rejeux |
+| `GatewayModeTest` | Mode passerelle hébergée : contrat de la requête (ni `phoneNumber` ni `provider`, `returnUrl` requis), signature du retour (forgée, altérée, expirée, mauvais secret), champs du checkout selon le mode |
+| `SecurityHardeningTest` | Fenêtre anti-rejeu du webhook : horodatage obligatoire, illisible, hors fenêtre, légèrement dans le futur |
 
 ## 2. WordPress réel (Docker, optionnel)
 
@@ -67,11 +68,11 @@ Le dossier du plugin est monté en direct : toute modification est immédiate.
 
 Pour arrêter : `docker compose down -v`.
 
-### Simulateur d'API (pour tester le menu K-Pay sans clés réelles)
+### Simulateur d'API (pour tester un parcours sans clés réelles)
 
-Le menu Soldes/Retraits interroge l'API K-Pay. Pour le tester sans clés — et
-sans jamais risquer un transfert réel — un mu-plugin intercepte les appels
-vers `admin.kpay.site` et renvoie des réponses conformes à la spec.
+Un mu-plugin intercepte les appels vers `admin.kpay.site` et renvoie des
+réponses conformes à la spec, ce qui permet de dérouler un paiement complet
+sans clés et sans jamais toucher à l'API réelle.
 
 ```bash
 docker compose exec wordpress sh -c \
@@ -79,25 +80,36 @@ docker compose exec wordpress sh -c \
    cp /var/www/html/kpay-tests/mu-kpay-api-mock.php /var/www/html/wp-content/mu-plugins/'
 ```
 
-Il simule trois wallets (XAF, XOF, KES) et respecte les numéros de test de la
-spec pour les retraits. **À ne jamais déployer en production** : pour tester
-avec la vraie API, ne l'installez pas et renseignez de vraies clés sandbox.
+Il reproduit le contrat de mode de l'API : un corps portant `phoneNumber` est
+traité en USSD, un corps portant `returnUrl` en passerelle hébergée, et un
+corps qui mélange les deux est refusé par un `400`. Deux options pilotent le
+statut renvoyé par `GET /payments/:id` :
+
+```bash
+# Le prochain relevé de statut renverra COMPLETED
+docker compose exec cli wp option update kpay_mock_status COMPLETED
+
+# Simuler un sous-paiement : la commande ne doit PAS être validée
+docker compose exec cli wp option update kpay_mock_paid_amount 1
+```
+
+**À ne jamais déployer en production** : pour tester avec la vraie API, ne
+l'installez pas et renseignez de vraies clés sandbox.
 
 Pour le retirer : `docker compose exec wordpress rm /var/www/html/wp-content/mu-plugins/mu-kpay-api-mock.php`
 
-## 3. Retraits en HTTP réel
+### Page de paiement simulée (mode passerelle hébergée)
 
-```bash
-# Prérequis : simulateur installé, secret webhook configuré
-./integration/payout-live-test.sh
-```
+En mode passerelle, K-Pay héberge la page de paiement puis renvoie le client
+par une URL signée. `integration/fake-gateway.php` tient ce rôle : servie sur
+<http://localhost:8888/kpay-tests/fake-gateway.php>, elle propose de conclure
+le paiement en `COMPLETED`, `FAILED` ou `CANCELLED`, et — surtout — de revenir
+avec une **signature invalide**, qui doit être refusée par le plugin.
 
-Vérifie les numéros virtuels de la spec (`237653456789` réussit,
-`237653456089` échoue côté opérateur) et chaque garde-fou : confirmation
-obligatoire, numéro invalide, montant sous le minimum, montant supérieur au
-solde, opérateur invalide, visiteur non connecté.
+Le plugin y est amené automatiquement : passez le mode de paiement sur
+« Passerelle hébergée », renseignez le secret passerelle, puis commandez.
 
-## 4. Webhook attaqué en HTTP réel
+## 3. Webhook attaqué en HTTP réel
 
 Requêtes réelles contre le serveur, sans simulation.
 

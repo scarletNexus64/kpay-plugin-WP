@@ -1,25 +1,117 @@
 /**
- * Pages d'administration K-Pay (réglages, soldes et retraits).
+ * Page de réglages K-Pay.
+ *
+ * WooCommerce rend les réglages dans une table nue, sans hiérarchie visuelle :
+ * clés d'API, secrets et options d'affichage se ressemblent tous. Les styles
+ * ci-dessous regroupent ces champs en sections lisibles, sans remplacer les
+ * composants de WordPress — les contrôles restent ceux de l'admin, seuls leur
+ * mise en page et leur regroupement changent.
  */
 
-/* --- Logo --- */
+.kpay-settings {
+	--kpay-radius: 8px;
+	--kpay-border: #dcdcde;
+	--kpay-surface: #fff;
+	--kpay-muted: #646970;
+	--kpay-text: #1d2327;
+	--kpay-accent: #2271b1;
+	max-width: 880px;
+}
+
+/* --- En-tête --- */
+
+.kpay-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 16px;
+	padding: 20px 24px;
+	margin: 16px 0 20px;
+	background: var(--kpay-surface);
+	border: 1px solid var(--kpay-border);
+	border-radius: var(--kpay-radius);
+}
+
+.kpay-header__brand {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
 
 .kpay-admin__logo {
-	height: 34px;
+	height: 30px;
 	width: auto;
 	display: block;
-	margin: 8px 0 14px;
+}
+
+.kpay-header__text {
+	font-size: 13px;
+	color: var(--kpay-muted);
+	margin: 2px 0 0;
+	max-width: 46ch;
+	line-height: 1.5;
+}
+
+.kpay-header__name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--kpay-text);
+	margin: 0;
+}
+
+/* --- Badge d'environnement ---
+   L'URL de l'API est identique en test et en production : sans repère visuel,
+   rien ne distingue une boutique qui encaisse réellement d'une boutique en
+   test. Le badge production tranche délibérément. */
+
+.kpay-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.kpay-badge::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.kpay-badge--sandbox {
+	background: #f0f0f1;
+	color: #50575e;
+	border: 1px solid #c3c4c7;
+}
+
+.kpay-badge--live {
+	background: #00450c;
+	color: #fff;
 }
 
 /* --- Bandeau d'environnement --- */
 
 .kpay-env-banner {
-	padding: 10px 14px;
-	margin: 12px 0 16px;
-	border-radius: 4px;
+	padding: 12px 16px;
+	margin: 0 0 20px;
+	border-radius: var(--kpay-radius);
 	border-left: 4px solid;
-	background: #fff;
-	max-width: 900px;
+	font-size: 13px;
+	line-height: 1.6;
+	max-width: 880px;
+}
+
+.kpay-env-banner strong {
+	display: block;
+	margin-bottom: 2px;
 }
 
 .kpay-env-banner--sandbox {
@@ -35,147 +127,194 @@
 	color: #8a2424;
 }
 
-.kpay-admin__title {
-	display: flex;
-	align-items: center;
-	gap: 12px;
+/* --- Diagnostic --- */
+
+.kpay-settings .notice.inline {
+	margin: 0 0 12px;
+	border-radius: 4px;
 }
 
-.kpay-badge {
-	display: inline-block;
-	padding: 2px 10px;
-	border-radius: 999px;
-	font-size: 12px;
+/* --- Sections de réglages ---
+   WooCommerce rend chaque champ « title » en <h3> suivi d'une <table>. On
+   traite ce couple comme une carte : le titre en devient l'en-tête. */
+
+.kpay-settings .wc-settings-sub-title {
+	font-size: 14px;
 	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-transform: uppercase;
-	vertical-align: middle;
+	color: var(--kpay-text);
+	margin: 24px 0 0;
+	padding: 14px 20px;
+	background: var(--kpay-surface);
+	border: 1px solid var(--kpay-border);
+	border-bottom: 0;
+	border-radius: var(--kpay-radius) var(--kpay-radius) 0 0;
 }
 
-.kpay-badge--sandbox {
-	background: #f0f0f1;
-	color: #50575e;
-	border: 1px solid #c3c4c7;
-}
-
-/* La production manipule de l'argent réel : le badge doit trancher. */
-.kpay-badge--live {
-	background: #00450c;
-	color: #fff;
-}
-
-/* --- Cartes de solde --- */
-
-.kpay-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-	gap: 16px;
-	margin: 20px 0;
-}
-
-.kpay-card {
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	border-radius: 8px;
-	padding: 20px;
-}
-
-.kpay-card__currency {
-	font-size: 12px;
-	font-weight: 600;
-	letter-spacing: 0.08em;
-	color: #646970;
-	text-transform: uppercase;
-}
-
-.kpay-card__amount {
-	font-size: 28px;
-	font-weight: 700;
-	line-height: 1.2;
-	margin: 6px 0 2px;
-	color: #1d2327;
-}
-
-.kpay-card__label {
-	font-size: 13px;
-	color: #646970;
-}
-
-.kpay-card__countries {
-	margin-top: 10px;
-	padding-top: 10px;
-	border-top: 1px solid #f0f0f1;
-	font-size: 12px;
-	color: #646970;
-}
-
-.kpay-card__detail {
-	display: grid;
-	grid-template-columns: 1fr auto;
-	gap: 2px 12px;
-	margin: 12px 0 16px;
-	font-size: 13px;
-}
-
-.kpay-card__detail dt {
-	color: #646970;
-}
-
-.kpay-card__detail dd {
+/* La description d'une section suit son titre, hors du tableau. */
+.kpay-settings .wc-settings-sub-title + p {
 	margin: 0;
-	text-align: right;
-	font-variant-numeric: tabular-nums;
+	padding: 2px 20px 6px;
+	background: var(--kpay-surface);
+	border-inline: 1px solid var(--kpay-border);
+	font-size: 13px;
+	color: var(--kpay-muted);
+	line-height: 1.6;
 }
 
-/* --- Panneaux --- */
-
-.kpay-panel {
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	border-radius: 8px;
-	padding: 4px 20px 20px;
-	margin: 20px 0;
-	max-width: 900px;
-}
-
-.kpay-refresh {
-	margin: 16px 0;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-
-/* --- Statuts --- */
-
-.kpay-status {
-	display: inline-block;
-	padding: 2px 8px;
+.kpay-settings .wc-settings-sub-title + p code {
+	font-size: 12px;
+	padding: 2px 6px;
+	background: #f0f0f1;
 	border-radius: 3px;
+}
+
+/* Le titre de la passerelle porte le lien de retour vers la liste des
+   paiements : il est conservé, mais allégé. Sa description, elle, répète
+   l'en-tête K-Pay rendu juste au-dessus. */
+.kpay-settings > h2.wc-admin-header {
+	font-size: 14px;
+	color: var(--kpay-muted);
+	font-weight: 500;
+	margin: 0 0 12px;
+}
+
+.kpay-settings > h2.wc-admin-header + p {
+	display: none;
+}
+
+.kpay-settings table.form-table {
+	margin: 0 0 4px;
+	padding: 4px 20px 12px;
+	background: var(--kpay-surface);
+	border: 1px solid var(--kpay-border);
+	border-top: 0;
+	border-radius: 0 0 var(--kpay-radius) var(--kpay-radius);
+}
+
+/* Un tableau qui ne suit pas un titre de section forme sa propre carte. */
+.kpay-settings table.form-table:first-of-type {
+	border-top: 1px solid var(--kpay-border);
+	border-radius: var(--kpay-radius);
+	padding-top: 12px;
+}
+
+.kpay-settings .form-table th {
+	width: 220px;
+	padding: 16px 10px 16px 0;
+	font-weight: 500;
+	color: var(--kpay-text);
+}
+
+.kpay-settings .form-table td {
+	padding: 14px 0;
+}
+
+.kpay-settings .form-table input[type="text"],
+.kpay-settings .form-table input[type="password"],
+.kpay-settings .form-table textarea,
+.kpay-settings .form-table select {
+	max-width: 420px;
+	width: 100%;
+	border-radius: 4px;
+}
+
+/* Les clés et secrets sont des chaînes opaques : une police à chasse fixe
+   rend leur préfixe (kpay_test_, sk_live_…) lisible d'un coup d'œil. */
+.kpay-settings #woocommerce_kpay_sandbox_api_key,
+.kpay-settings #woocommerce_kpay_sandbox_secret_key,
+.kpay-settings #woocommerce_kpay_live_api_key,
+.kpay-settings #woocommerce_kpay_live_secret_key,
+.kpay-settings #woocommerce_kpay_webhook_secret,
+.kpay-settings #woocommerce_kpay_gateway_secret {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 13px;
+	letter-spacing: 0.01em;
+}
+
+.kpay-settings .form-table .description {
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--kpay-muted);
+	margin-top: 6px;
+	max-width: 62ch;
+}
+
+.kpay-settings .form-table .description code {
 	font-size: 11px;
-	font-weight: 600;
-	text-transform: uppercase;
+	padding: 1px 5px;
+	background: #f0f0f1;
+	border-radius: 3px;
 }
 
-.kpay-status--completed {
-	background: #d5e5d5;
-	color: #00450c;
+/* L'URL du webhook se copie dans le tableau de bord K-Pay : elle doit
+   pouvoir être sélectionnée sans être tronquée. */
+.kpay-settings h3 + p code,
+.kpay-webhook-url {
+	user-select: all;
+	word-break: break-all;
 }
 
-.kpay-status--pending,
-.kpay-status--processing {
+/* --- Mode passerelle : avertissement d'alignement ---
+   Le mode doit refléter la configuration de l'Application côté K-Pay ; un
+   décalage fait refuser les paiements par l'API. */
+
+.kpay-settings #woocommerce_kpay_payment_mode {
+	max-width: 460px;
+}
+
+.kpay-settings [for="woocommerce_kpay_payment_mode"] + td .description,
+.kpay-settings #woocommerce_kpay_payment_mode ~ .description {
+	border-left: 3px solid #dba617;
+	padding-left: 10px;
 	background: #fcf9e8;
+	padding: 8px 10px;
+	border-radius: 0 4px 4px 0;
 	color: #674600;
 }
 
-.kpay-status--failed,
-.kpay-status--cancelled {
-	background: #f7e4e4;
-	color: #8a2424;
+/* --- Bouton d'enregistrement --- */
+
+.kpay-settings + p.submit,
+.woocommerce-save-button {
+	margin-top: 20px;
 }
 
+/* --- Écrans étroits --- */
+
+@media screen and (max-width: 782px) {
+	.kpay-header {
+		flex-direction: column;
+		align-items: flex-start;
+		padding: 16px;
+	}
+
+	.kpay-settings h3:not(.kpay-header__name),
+	.kpay-settings h3 + p,
+	.kpay-settings table.form-table {
+		padding-inline: 14px;
+	}
+
+	.kpay-settings .form-table th {
+		width: auto;
+		padding-bottom: 4px;
+	}
+}
+
+/* --- Thème sombre ---
+   WordPress ne fournit pas de mode sombre officiel ; certains schémas
+   d'administration et extensions en appliquent un. On neutralise alors les
+   fonds blancs plutôt que d'imposer une palette. */
+
 @media (prefers-color-scheme: dark) {
-	.kpay-card,
-	.kpay-panel {
-		background: transparent;
+	.kpay-settings {
+		--kpay-surface: transparent;
+		--kpay-border: #3c434a;
+		--kpay-text: inherit;
+		--kpay-muted: #a7aaad;
+	}
+
+	.kpay-settings h3 + p code,
+	.kpay-settings .form-table .description code {
+		background: rgba(255, 255, 255, 0.08);
 	}
 }

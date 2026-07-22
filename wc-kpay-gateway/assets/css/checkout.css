@@ -75,3 +75,12 @@ img.wc-kpay-icon {
 .wc-kpay-fields .wc-kpay-sandbox-notice {
 	margin: 0 0 1em;
 }
+
+/* Mode passerelle hébergée : le checkout ne collecte aucun champ, seul un
+   message annonce la redirection. Le liseré le distingue de la description
+   du moyen de paiement, sans imposer de couleur de fond au thème. */
+.wc-kpay-redirect-notice {
+	border-left: 3px solid currentColor;
+	padding-left: 0.75em;
+	opacity: 0.85;
+}

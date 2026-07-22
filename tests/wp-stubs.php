@@ -111,6 +111,24 @@ function esc_attr( $text ) {
 function esc_url( $url ) {
 	return filter_var( $url, FILTER_SANITIZE_URL );
 }
+/**
+ * Ajoute des paramètres à une URL, en préservant ceux déjà présents.
+ */
+function add_query_arg( $args, $url = '' ) {
+	$parts    = explode( '#', (string) $url, 2 );
+	$fragment = isset( $parts[1] ) ? '#' . $parts[1] : '';
+	$base     = $parts[0];
+
+	$existing = array();
+	if ( false !== strpos( $base, '?' ) ) {
+		list( $base, $query ) = explode( '?', $base, 2 );
+		parse_str( $query, $existing );
+	}
+
+	$merged = array_merge( $existing, (array) $args );
+
+	return $base . ( $merged ? '?' . http_build_query( $merged ) : '' ) . $fragment;
+}
 function wp_kses_post( $data ) {
 	return $data;
 }

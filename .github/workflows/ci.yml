@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 7.4 est le minimum déclaré par l'en-tête du plugin, 8.3 la version
+        # servie par la plupart des hébergeurs. Les deux doivent passer.
+        php: ['7.4', '8.3']
+
+    name: PHP ${{ matrix.php }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Vérifier la syntaxe
+        run: find wc-kpay-gateway -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Installer les dépendances de test
+        working-directory: tests
+        run: composer install --prefer-dist --no-progress
+
+      - name: Tests unitaires
+        working-directory: tests
+        run: vendor/bin/phpunit

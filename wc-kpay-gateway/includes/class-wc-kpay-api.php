@@ -61,12 +61,12 @@ class WC_KPay_API {
 		if ( '' === (string) $api_key || '' === (string) $secret_key ) {
 			return new WP_Error(
 				'kpay_keys_missing',
-				__( 'Les deux clés sont requises.', 'wc-kpay-gateway' )
+				__( 'Les deux clés sont requises.', 'k-pay-for-woocommerce' )
 			);
 		}
 
 		if ( ! isset( self::KEY_PREFIXES[ $expected_environment ] ) ) {
-			return new WP_Error( 'kpay_unknown_environment', __( 'Environnement inconnu.', 'wc-kpay-gateway' ) );
+			return new WP_Error( 'kpay_unknown_environment', __( 'Environnement inconnu.', 'k-pay-for-woocommerce' ) );
 		}
 
 		$expected = self::KEY_PREFIXES[ $expected_environment ];
@@ -77,7 +77,7 @@ class WC_KPay_API {
 				'kpay_key_prefix_unknown',
 				sprintf(
 					/* translators: %s: préfixe attendu */
-					__( 'La clé API ne commence pas par %s : vérifiez que vous avez copié la bonne clé depuis votre tableau de bord K-Pay.', 'wc-kpay-gateway' ),
+					__( 'La clé API ne commence pas par %s : vérifiez que vous avez copié la bonne clé depuis votre tableau de bord K-Pay.', 'k-pay-for-woocommerce' ),
 					$expected['api']
 				)
 			);
@@ -88,7 +88,7 @@ class WC_KPay_API {
 				'kpay_key_environment_mismatch',
 				sprintf(
 					/* translators: 1: environnement choisi, 2: environnement de la clé, 3: préfixe attendu */
-					__( 'Environnement « %1$s » sélectionné, mais la clé API est une clé « %2$s ». Une clé %3$s est attendue.', 'wc-kpay-gateway' ),
+					__( 'Environnement « %1$s » sélectionné, mais la clé API est une clé « %2$s ». Une clé %3$s est attendue.', 'k-pay-for-woocommerce' ),
 					$expected_environment,
 					$detected,
 					$expected['api']
@@ -101,7 +101,7 @@ class WC_KPay_API {
 				'kpay_secret_prefix_mismatch',
 				sprintf(
 					/* translators: %s: préfixe attendu */
-					__( 'La clé secrète ne commence pas par %s : elle n\'appartient pas au même environnement que la clé API.', 'wc-kpay-gateway' ),
+					__( 'La clé secrète ne commence pas par %s : elle n\'appartient pas au même environnement que la clé API.', 'k-pay-for-woocommerce' ),
 					$expected['secret']
 				)
 			);
@@ -178,12 +178,60 @@ class WC_KPay_API {
 	}
 
 	/**
-	 * Initie un paiement en mode USSD (push direct sur le téléphone).
+	 * Initie un paiement.
+	 *
+	 * Le même endpoint sert les deux modes ; c'est la forme du corps qui les
+	 * distingue (USSD : phoneNumber + provider ; GATEWAY : returnUrl, sans
+	 * numéro). Le mode doit correspondre à la configuration de l'Application
+	 * côté K-Pay, sinon l'API répond 400.
 	 *
 	 * @return array|WP_Error Ressource paiement, ou WP_Error décrivant l'échec.
 	 */
 	public function init_payment( array $payload ) {
 		return $this->request( 'POST', '/api/v1/payments/init', $payload );
+	}
+
+	/**
+	 * Vérifie la signature du retour de la passerelle hébergée.
+	 *
+	 * La chaîne signée est « status|reference|externalId|ts » (spec), en
+	 * HMAC-SHA256 hex avec le secret passerelle. La comparaison est faite en
+	 * temps constant, et l'horodatage borné pour interdire le rejeu d'un
+	 * retour « COMPLETED » capturé.
+	 *
+	 * @param array  $params Paramètres de l'URL de retour.
+	 * @param string $secret Secret passerelle.
+	 * @return true|WP_Error
+	 */
+	public static function verify_gateway_return( array $params, $secret ) {
+		if ( '' === (string) $secret ) {
+			return new WP_Error( 'kpay_gateway_no_secret', __( 'Secret passerelle non configuré.', 'k-pay-for-woocommerce' ) );
+		}
+
+		foreach ( array( 'status', 'reference', 'externalId', 'ts', 'sig' ) as $field ) {
+			if ( ! isset( $params[ $field ] ) || '' === (string) $params[ $field ] ) {
+				return new WP_Error(
+					'kpay_gateway_incomplete',
+					__( 'Retour de paiement incomplet.', 'k-pay-for-woocommerce' )
+				);
+			}
+		}
+
+		$signed   = $params['status'] . '|' . $params['reference'] . '|' . $params['externalId'] . '|' . $params['ts'];
+		$expected = hash_hmac( 'sha256', $signed, $secret );
+
+		if ( ! hash_equals( $expected, strtolower( trim( (string) $params['sig'] ) ) ) ) {
+			return new WP_Error( 'kpay_gateway_bad_signature', __( 'Signature de retour invalide.', 'k-pay-for-woocommerce' ) );
+		}
+
+		// `ts` est en millisecondes (spec). Au-delà de 10 minutes, on refuse :
+		// un retour signé capturé ne doit pas être rejouable indéfiniment.
+		$age = abs( time() - (int) round( (int) $params['ts'] / 1000 ) );
+		if ( $age > 600 ) {
+			return new WP_Error( 'kpay_gateway_expired', __( 'Retour de paiement expiré.', 'k-pay-for-woocommerce' ) );
+		}
+
+		return true;
 	}
 
 	/**
@@ -202,35 +250,6 @@ class WC_KPay_API {
 	 */
 	public function get_application_info() {
 		return $this->request( 'GET', '/api/v1/payments/me' );
-	}
-
-	/**
-	 * Soldes des wallets, un par devise.
-	 *
-	 * @return array|WP_Error Liste d'entrées { currency, balance, reservedBalance, availableBalance }.
-	 */
-	public function get_balances() {
-		return $this->request( 'GET', '/api/v1/payments/balance' );
-	}
-
-	/**
-	 * Initie un retrait vers un numéro Mobile Money (mode USSD).
-	 *
-	 * Attention : en environnement live, cet appel transfère des fonds réels.
-	 *
-	 * @return array|WP_Error
-	 */
-	public function init_withdrawal( array $payload ) {
-		return $this->request( 'POST', '/api/v1/payments/withdraw', $payload );
-	}
-
-	/**
-	 * Statut d'un retrait.
-	 *
-	 * @return array|WP_Error
-	 */
-	public function get_withdrawal( $withdrawal_id ) {
-		return $this->request( 'GET', '/api/v1/payments/withdraw/' . rawurlencode( $withdrawal_id ) );
 	}
 
 	/**
@@ -275,18 +294,18 @@ class WC_KPay_API {
 	 */
 	public static function get_country_label( $country ) {
 		$labels = array(
-			'BEN' => __( 'Bénin', 'wc-kpay-gateway' ),
-			'CMR' => __( 'Cameroun', 'wc-kpay-gateway' ),
-			'CIV' => __( 'Côte d\'Ivoire', 'wc-kpay-gateway' ),
-			'COD' => __( 'RD Congo', 'wc-kpay-gateway' ),
-			'GAB' => __( 'Gabon', 'wc-kpay-gateway' ),
-			'KEN' => __( 'Kenya', 'wc-kpay-gateway' ),
-			'COG' => __( 'Congo', 'wc-kpay-gateway' ),
-			'RWA' => __( 'Rwanda', 'wc-kpay-gateway' ),
-			'SEN' => __( 'Sénégal', 'wc-kpay-gateway' ),
-			'SLE' => __( 'Sierra Leone', 'wc-kpay-gateway' ),
-			'UGA' => __( 'Ouganda', 'wc-kpay-gateway' ),
-			'ZMB' => __( 'Zambie', 'wc-kpay-gateway' ),
+			'BEN' => __( 'Bénin', 'k-pay-for-woocommerce' ),
+			'CMR' => __( 'Cameroun', 'k-pay-for-woocommerce' ),
+			'CIV' => __( 'Côte d\'Ivoire', 'k-pay-for-woocommerce' ),
+			'COD' => __( 'RD Congo', 'k-pay-for-woocommerce' ),
+			'GAB' => __( 'Gabon', 'k-pay-for-woocommerce' ),
+			'KEN' => __( 'Kenya', 'k-pay-for-woocommerce' ),
+			'COG' => __( 'Congo', 'k-pay-for-woocommerce' ),
+			'RWA' => __( 'Rwanda', 'k-pay-for-woocommerce' ),
+			'SEN' => __( 'Sénégal', 'k-pay-for-woocommerce' ),
+			'SLE' => __( 'Sierra Leone', 'k-pay-for-woocommerce' ),
+			'UGA' => __( 'Ouganda', 'k-pay-for-woocommerce' ),
+			'ZMB' => __( 'Zambie', 'k-pay-for-woocommerce' ),
 		);
 
 		return isset( $labels[ $country ] ) ? $labels[ $country ] : $country;
@@ -313,25 +332,13 @@ class WC_KPay_API {
 	}
 
 	/**
-	 * Montant minimal d'un retrait, par devise (spec : 100 XAF en zone CEMAC).
-	 */
-	public static function get_minimum_withdrawal( $currency ) {
-		$minimums = array(
-			'XAF' => 100,
-			'XOF' => 100,
-		);
-
-		return isset( $minimums[ $currency ] ) ? $minimums[ $currency ] : 100;
-	}
-
-	/**
 	 * Exécute une requête authentifiée et normalise la réponse.
 	 *
 	 * @return array|WP_Error
 	 */
 	private function request( $method, $path, $body = null ) {
 		if ( empty( $this->api_key ) || empty( $this->secret_key ) ) {
-			return new WP_Error( 'kpay_missing_keys', __( 'Clés API K-Pay non configurées.', 'wc-kpay-gateway' ) );
+			return new WP_Error( 'kpay_missing_keys', __( 'Clés API K-Pay non configurées.', 'k-pay-for-woocommerce' ) );
 		}
 
 		$args = array(
@@ -356,7 +363,7 @@ class WC_KPay_API {
 				'kpay_http_error',
 				sprintf(
 					/* translators: %s: message d'erreur réseau */
-					__( 'Impossible de contacter K-Pay : %s', 'wc-kpay-gateway' ),
+					__( 'Impossible de contacter K-Pay : %s', 'k-pay-for-woocommerce' ),
 					$response->get_error_message()
 				)
 			);

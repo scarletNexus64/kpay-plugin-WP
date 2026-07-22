@@ -89,6 +89,11 @@ final class PollingTest extends TestCase {
 		$this->assertSame( 403, $r->status );
 	}
 
+	/**
+	 * Une commande inexistante et une clé invalide donnent la même réponse :
+	 * distinguer les deux transformerait l'endpoint en oracle permettant
+	 * d'énumérer les commandes existantes.
+	 */
 	public function test_rejects_unknown_order(): void {
 		$r = $this->poll( array(
 			'order_id'  => '9999',
@@ -97,7 +102,33 @@ final class PollingTest extends TestCase {
 		) );
 
 		$this->assertFalse( $r->success );
-		$this->assertSame( 404, $r->status );
+		$this->assertSame( 403, $r->status );
+	}
+
+	/** Même réponse pour une commande existante dont la clé est fausse. */
+	public function test_unknown_order_and_bad_key_are_indistinguishable(): void {
+		$order = new WC_Order( 77 );
+		$order->update_meta_data( '_kpay_payment_id', 'pay_x' );
+		$order->update_status( 'on-hold' );
+		kpay_test_add_order( $order );
+
+		$existing = $this->poll( array(
+			'order_id'  => '77',
+			'order_key' => 'wrong_key',
+			'nonce'     => wp_create_nonce( 'kpay_status_77' ),
+		) );
+
+		$missing = $this->poll( array(
+			'order_id'  => '9999',
+			'order_key' => 'wrong_key',
+			'nonce'     => wp_create_nonce( 'kpay_status_9999' ),
+		) );
+
+		$this->assertSame(
+			$missing->status,
+			$existing->status,
+			'Le code de retour ne doit pas révéler l\'existence de la commande.'
+		);
 	}
 
 	// --- Application du statut ---

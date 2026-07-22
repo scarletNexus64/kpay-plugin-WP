@@ -45,7 +45,7 @@ final class WC_KPay_Blocks_Support extends AbstractPaymentMethodType {
 		);
 
 		if ( function_exists( 'wp_set_script_translations' ) ) {
-			wp_set_script_translations( 'wc-kpay-blocks', 'wc-kpay-gateway' );
+			wp_set_script_translations( 'wc-kpay-blocks', 'k-pay-for-woocommerce' );
 		}
 
 		return array( 'wc-kpay-blocks' );
@@ -68,6 +68,10 @@ final class WC_KPay_Blocks_Support extends AbstractPaymentMethodType {
 			'title'       => $this->gateway->get_option( 'title' ),
 			'description' => $this->gateway->get_option( 'description' ),
 			'providers'   => $providers,
+			// En mode passerelle, le bloc n'affiche aucun champ : opérateur et
+			// numéro sont saisis sur la page hébergée par K-Pay.
+			'mode'        => $this->gateway->get_payment_mode(),
+			'redirectNotice' => __( 'Vous serez redirigé vers la page de paiement sécurisée K-Pay pour finaliser votre commande.', 'k-pay-for-woocommerce' ),
 			'isSandbox'   => 'sandbox' === $this->gateway->get_environment(),
 			'iconUrl'     => WC_KPAY_PLUGIN_URL . 'assets/images/kpay-logo-dark.png',
 			'supports'    => array_filter( $this->gateway->supports, array( $this->gateway, 'supports' ) ),

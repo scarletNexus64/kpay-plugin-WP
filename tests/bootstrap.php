@@ -127,6 +127,9 @@ class WC_Order {
 	public function get_order_key() {
 		return $this->key;
 	}
+	public function get_cancel_order_url_raw() {
+		return 'https://boutique.test/panier/?cancel_order=true&order_id=' . $this->id;
+	}
 	public function get_total() {
 		return $this->total;
 	}
@@ -297,6 +300,11 @@ function kpay_test_reset() {
 	$GLOBALS['kpay_test_currency']      = 'XAF';
 	$GLOBALS['kpay_test_logger']        = new KPay_Test_Logger();
 	$GLOBALS['kpay_test_wc']            = new KPay_Test_WC();
+	// Le webhook mémorise les notifications traitées et limite la fréquence du
+	// polling via des transients : sans remise à zéro, ces marques fuiraient
+	// d'un test à l'autre et feraient passer des notifications légitimes pour
+	// des rejeux.
+	$GLOBALS['kpay_test_transients']    = array();
 	unset( $GLOBALS['kpay_test_orders_query_result'] );
 	$_POST = array();
 }
@@ -352,4 +360,3 @@ function wc_kpay_asset_version( $relative_path = '' ) {
 require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-api.php';
 require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-gateway.php';
 require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-webhook.php';
-require_once WC_KPAY_PLUGIN_DIR . 'includes/class-wc-kpay-admin.php';

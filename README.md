@@ -1,8 +1,11 @@
-# K-Pay pour WooCommerce
+# K-Pay for WooCommerce
 
 Passerelle de paiement Mobile Money (MTN MoMo, Orange Money, Airtel, M-Pesa…)
-pour WooCommerce, avec suivi des soldes et retraits depuis l'administration.
-12 pays africains.
+pour WooCommerce. 12 pays africains.
+
+Le plugin encaisse uniquement. Vos soldes et vos retraits se consultent et se
+pilotent depuis votre tableau de bord K-Pay (<https://admin.kpay.site>), pas
+depuis WordPress.
 
 ---
 
@@ -58,7 +61,7 @@ trop : WordPress ne verra pas le plugin.
 
 ### 3. Activez
 
-**Extensions** → « K-Pay Gateway » → **Activer**.
+**Extensions** → « K-Pay for WooCommerce » → **Activer**.
 
 WooCommerce doit être installé et actif au préalable.
 
@@ -87,14 +90,19 @@ En résumé :
    EUR ne pourra pas l'utiliser.
 2. **WooCommerce → Réglages → Paiements → K-Pay** : cochez « Activer », gardez
    l'environnement **Sandbox**, collez vos clés `kpay_test_…` / `sk_test_…`.
-3. Copiez l'**URL du webhook** affichée dans les réglages, déclarez-la dans
+3. Réglez le **Mode de paiement** sur celui configuré pour votre Application
+   dans le tableau de bord K-Pay : **USSD** (le client saisit son numéro sur
+   votre site) ou **Passerelle hébergée** (le client est redirigé vers la page
+   de paiement K-Pay). Les deux réglages doivent concorder, sinon l'API refuse
+   les paiements. En mode passerelle, renseignez aussi le **secret passerelle**.
+4. Copiez l'**URL du webhook** affichée dans les réglages, déclarez-la dans
    votre tableau de bord K-Pay, et collez en retour le **secret webhook**.
    Sans ce secret, les notifications de paiement sont rejetées.
-4. Testez une commande avec le numéro `237653456789` : il force un paiement
+5. Testez une commande avec le numéro `237653456789` : il force un paiement
    réussi en sandbox.
 
-Un menu **K-Pay** apparaît dans la barre latérale : soldes par devise et
-retraits.
+Les soldes et les retraits ne se gèrent pas depuis WordPress : rendez-vous sur
+<https://admin.kpay.site>.
 
 ---
 
@@ -105,7 +113,7 @@ retraits.
 ```bash
 cd tests
 composer install
-./vendor/bin/phpunit             # 209 tests
+./vendor/bin/phpunit             # 185 tests
 ./vendor/bin/phpunit --testdox   # détail lisible
 ```
 
@@ -131,9 +139,8 @@ rechargés automatiquement à chaque modification, sans vider le cache.
 
 | Contrôle | Résultat |
 | --- | --- |
-| Tests unitaires | 209 tests, 465 assertions |
+| Tests unitaires | 185 tests, 369 assertions |
 | WordPress 6.9 + WooCommerce 10.9 | 34 vérifications |
-| Retraits en HTTP réel | 10 tests |
 | Webhook attaqué en HTTP réel | 8 tests |
 | Audit de sécurité | aucune faille critique ni élevée |
 | Erreurs / avertissements PHP | aucun |
