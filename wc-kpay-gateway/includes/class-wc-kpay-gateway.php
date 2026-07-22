@@ -299,6 +299,9 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 		if ( 'woocommerce_page_wc-settings' !== $hook ) {
 			return;
 		}
+		// Lecture seule d'un paramètre de navigation de WooCommerce, pour savoir
+		// si la page affichée est la nôtre : aucune donnée n'est traitée ici.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$section = isset( $_GET['section'] ) ? sanitize_text_field( wp_unslash( $_GET['section'] ) ) : '';
 		if ( $this->id !== $section ) {
 			return;
@@ -409,6 +412,9 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 			esc_attr__( 'K-Pay', 'k-pay-for-woocommerce' )
 		);
 
+		// Filtre de WooCommerce, appliqué par WC_Payment_Gateway::get_icon() que
+		// cette méthode remplace : le préfixer couperait les thèmes et
+		// extensions qui s'y branchent pour toutes les passerelles.
 		return apply_filters( 'woocommerce_gateway_icon', $html, $this->id );
 	}
 
@@ -548,7 +554,9 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 	 */
 	public function payment_fields() {
 		if ( $this->description ) {
-			echo wpautop( wp_kses_post( $this->description ) );
+			// wp_kses_post en dernier : c'est lui qui échappe, et l'appliquer
+			// après wpautop garde la sortie reconnaissable comme échappée.
+			echo wp_kses_post( wpautop( $this->description ) );
 		}
 
 		if ( 'sandbox' === $this->get_environment() ) {
@@ -601,7 +609,12 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 			return true;
 		}
 
+		// WooCommerce vérifie le nonce du checkout avant d'appeler cette méthode
+		// (WC_Checkout::process_checkout) : le revérifier ici échouerait sur le
+		// checkout en blocs, qui soumet via l'API REST avec son propre jeton.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
 		$provider = isset( $_POST['kpay_provider'] ) ? sanitize_text_field( wp_unslash( $_POST['kpay_provider'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
 		$phone    = isset( $_POST['kpay_phone'] ) ? sanitize_text_field( wp_unslash( $_POST['kpay_phone'] ) ) : '';
 
 		if ( ! array_key_exists( $provider, $this->get_active_providers() ) ) {
@@ -637,7 +650,11 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 		// En mode passerelle, K-Pay collecte opérateur et numéro sur sa propre
 		// page : les transmettre ferait échouer l'init (contrat de mode).
 		if ( 'ussd' === $mode ) {
+			// Même chemin que validate_fields() : le nonce du checkout est déjà
+			// vérifié par WooCommerce, qui appelle cette méthode.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing
 			$provider = isset( $_POST['kpay_provider'] ) ? sanitize_text_field( wp_unslash( $_POST['kpay_provider'] ) ) : '';
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing
 			$phone    = isset( $_POST['kpay_phone'] ) ? sanitize_text_field( wp_unslash( $_POST['kpay_phone'] ) ) : '';
 
 			if ( ! array_key_exists( $provider, $this->get_active_providers() ) ) {

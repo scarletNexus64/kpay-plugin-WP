@@ -329,8 +329,11 @@ class WC_KPay_Webhook {
 		}
 
 		// Repli : requête sur métadonnée, compatible HPOS et post meta.
+		// Repli rare : seules les références au format hérité arrivent ici, et
+		// la requête est bornée à une ligne sur une métadonnée indexée.
 		$orders = wc_get_orders( array(
 			'limit'      => 1,
+			// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
 			'meta_query' => array(
 				array(
 					'key'     => '_kpay_external_id',

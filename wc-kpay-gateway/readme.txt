@@ -10,7 +10,7 @@ Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Encaissez par Mobile Money (MTN MoMo, Orange Money, Airtel, M-Pesa) dans WooCommerce. 12 pays africains.
+Accept Mobile Money payments (MTN MoMo, Orange Money, Airtel, M-Pesa) in WooCommerce across 12 African countries.
 
 == Description ==
 
@@ -191,12 +191,10 @@ Oui, ainsi qu'avec le checkout classique et le stockage HPOS des commandes.
 == Upgrade Notice ==
 
 = 2.1.0 =
-Le menu K-Pay (soldes et retraits) est retiré : ces opérations se font
-désormais depuis votre tableau de bord K-Pay. Vérifiez que le nouveau réglage
-« Mode de paiement » correspond au mode configuré pour votre Application dans
-ce tableau de bord, faute de quoi les paiements seront refusés. Si vous
-utilisez le mode « Passerelle hébergée », renseignez le secret passerelle dans
-les réglages.
+Le réglage « Mode de paiement » doit correspondre au mode configuré pour votre
+Application dans le tableau de bord K-Pay, sinon les paiements sont refusés. En
+mode « Passerelle hébergée », renseignez le secret passerelle. Le menu K-Pay
+est retiré : soldes et retraits passent par le tableau de bord.
 
 = 2.0.0 =
 Version initiale publique. Configurez le secret webhook dans les réglages :

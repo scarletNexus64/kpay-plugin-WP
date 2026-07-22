@@ -106,6 +106,13 @@ add_filter( 'plugin_locale', function ( $locale, $domain ) {
  * modifier le code, en déposant un .mo dans languages/.
  */
 add_action( 'init', function () {
+	// WordPress charge seul les traductions publiées sur wordpress.org depuis
+	// la 4.6. L'appel reste utile aux installations manuelles, qui déposent un
+	// .mo dans languages/ sans passer par le répertoire.
+	if ( ! is_readable( WC_KPAY_PLUGIN_DIR . 'languages' ) ) {
+		return;
+	}
+
 	load_plugin_textdomain(
 		'k-pay-for-woocommerce',
 		false,
