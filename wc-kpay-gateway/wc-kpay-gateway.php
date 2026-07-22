@@ -87,7 +87,8 @@ function wc_kpay_configured_locale() {
  * Force la locale du plugin quand le marchand en a choisi une.
  *
  * Le filtre est restreint à notre domaine : le reste du site, WooCommerce
- * inclus, garde la langue de WordPress.
+ * inclus, garde la langue de WordPress. Il s'applique au chargement que
+ * WordPress effectue lui-même depuis la 4.6, sans load_plugin_textdomain().
  */
 add_filter( 'plugin_locale', function ( $locale, $domain ) {
 	if ( 'k-pay-for-woocommerce' !== $domain ) {
@@ -98,27 +99,6 @@ add_filter( 'plugin_locale', function ( $locale, $domain ) {
 
 	return $configured ? $configured : $locale;
 }, 10, 2 );
-
-/**
- * Chargement des traductions.
- *
- * L'interface est en français ; ce chargement permet de la traduire sans
- * modifier le code, en déposant un .mo dans languages/.
- */
-add_action( 'init', function () {
-	// WordPress charge seul les traductions publiées sur wordpress.org depuis
-	// la 4.6. L'appel reste utile aux installations manuelles, qui déposent un
-	// .mo dans languages/ sans passer par le répertoire.
-	if ( ! is_readable( WC_KPAY_PLUGIN_DIR . 'languages' ) ) {
-		return;
-	}
-
-	load_plugin_textdomain(
-		'k-pay-for-woocommerce',
-		false,
-		dirname( plugin_basename( WC_KPAY_PLUGIN_FILE ) ) . '/languages'
-	);
-} );
 
 /**
  * Avertissement si WooCommerce est absent.

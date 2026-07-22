@@ -415,6 +415,7 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 		// Filtre de WooCommerce, appliqué par WC_Payment_Gateway::get_icon() que
 		// cette méthode remplace : le préfixer couperait les thèmes et
 		// extensions qui s'y branchent pour toutes les passerelles.
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		return apply_filters( 'woocommerce_gateway_icon', $html, $this->id );
 	}
 

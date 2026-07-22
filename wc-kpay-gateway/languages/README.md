@@ -12,3 +12,8 @@ Exemple pour l'anglais : `k-pay-for-woocommerce-en_US.po` / `.mo`.
 Le domaine de texte est `k-pay-for-woocommerce` : il reprend le slug du plugin
 sur wordpress.org, et les fichiers `.mo` ne sont chargés que si leur nom le
 répète exactement.
+
+Le plugin n'appelle pas `load_plugin_textdomain()` : WordPress charge seul les
+traductions depuis la 4.6, celles publiées via translate.wordpress.org comme
+celles déposées ici. Le réglage « Langue » reste opérant — il passe par le
+filtre `plugin_locale`, appliqué à ce chargement automatique.

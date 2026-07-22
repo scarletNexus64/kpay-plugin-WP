@@ -14,188 +14,186 @@ Accept Mobile Money payments (MTN MoMo, Orange Money, Airtel, M-Pesa) in WooComm
 
 == Description ==
 
-K-Pay ajoute le paiement Mobile Money à votre boutique WooCommerce. Le plugin
-se consacre à l'encaissement : vos soldes et vos retraits se consultent et se
-pilotent depuis votre tableau de bord K-Pay (https://admin.kpay.site).
+K-Pay adds Mobile Money payments to your WooCommerce store. The plugin handles
+collection only: balances and payouts are managed from your K-Pay dashboard
+(https://admin.kpay.site).
 
-= Deux modes de paiement =
+= Two payment modes =
 
-En mode **USSD**, le client choisit son opérateur et saisit son numéro au
-checkout, puis reçoit une demande de confirmation sur son téléphone.
+In **USSD** mode, the customer picks an operator and enters their phone number
+at checkout, then receives a confirmation request on their phone.
 
-En mode **Passerelle hébergée**, le client est redirigé vers la page de paiement
-de K-Pay, puis renvoyé sur votre boutique par une URL signée dont le plugin
-vérifie la signature avant de reconfirmer le statut auprès de l'API.
+In **Hosted gateway** mode, the customer is redirected to the K-Pay payment
+page, then returned to your store through a signed URL whose signature the
+plugin verifies before reconfirming the status with the API.
 
-Le mode choisi dans le plugin doit correspondre à celui configuré pour votre
-Application dans le tableau de bord K-Pay, sinon l'API refuse les paiements.
+The mode selected in the plugin must match the one configured for your
+Application in the K-Pay dashboard, otherwise the API rejects payments.
 
-Dans les deux cas, la commande n'est marquée payée qu'après confirmation
-vérifiée de K-Pay, jamais sur la base d'une redirection.
+In both modes, an order is only marked as paid after a verified confirmation
+from K-Pay, never on the basis of a redirect.
 
-= Langue =
+= Language =
 
-Les textes du plugin suivent par défaut la langue de WordPress. Vous pouvez les
-forcer en français ou en anglais sans affecter le reste du site.
+Plugin text follows the WordPress language by default. You can force it to
+French or English without affecting the rest of the site.
 
-= Opérateurs supportés =
+= Supported operators =
 
-* Bénin — MTN MoMo, Moov
-* Cameroun — MTN MoMo, Orange Money
+* Benin — MTN MoMo, Moov
+* Cameroon — MTN MoMo, Orange Money
 * Congo — Airtel, MTN MoMo
 * Côte d'Ivoire — MTN MoMo, Orange Money
+* DR Congo — Vodacom M-Pesa, Airtel, Orange
 * Gabon — Airtel Money
 * Kenya — M-Pesa
-* Ouganda — Airtel, MTN MoMo
-* RD Congo — Vodacom M-Pesa, Airtel, Orange
 * Rwanda — Airtel, MTN MoMo
-* Sénégal — Free Money, Orange Money
+* Senegal — Free Money, Orange Money
 * Sierra Leone — Orange Money
-* Zambie — Airtel, MTN MoMo, Zamtel
+* Uganda — Airtel, MTN MoMo
+* Zambia — Airtel, MTN MoMo, Zamtel
 
-= Devises =
+= Currencies =
 
-XAF, XOF, KES, CDF, UGX, RWF, ZMW, SLE. Aucune conversion n'est effectuée : la
-devise de la boutique doit correspondre à celle du pays de l'opérateur.
+XAF, XOF, KES, CDF, UGX, RWF, ZMW, SLE. No conversion is performed: the store
+currency must match the currency of the operator's country.
 
-= Sécurité =
+= Security =
 
-* Webhooks signés (HMAC-SHA256, comparaison à temps constant, fenêtre anti-rejeu)
-* Horodatage obligatoire et déduplication des notifications rejouées
-* Montant du webhook comparé au total de la commande
-* Seuls les événements payment.* modifient le statut d'une commande
-* Retour de la passerelle hébergée signé, puis reconfirmé par appel API
-* Montant toujours calculé côté serveur
-* Clés API jamais exposées au navigateur ni journalisées
-* Environnements test et production strictement cloisonnés
+* Signed webhooks (HMAC-SHA256, constant-time comparison, replay window)
+* Mandatory timestamp and deduplication of replayed notifications
+* Webhook amount compared against the order total
+* Only payment.* events can change an order status
+* Hosted gateway return is signed, then reconfirmed through an API call
+* Amounts always computed server-side
+* API keys never exposed to the browser and never logged
+* Test and production environments strictly separated
 
-= Service externe =
+= External service =
 
-Ce plugin s'appuie sur K-Pay, un service tiers d'encaissement Mobile Money, pour
-traiter les paiements. Sans ce service, le plugin ne peut pas fonctionner : c'est
-K-Pay qui contacte l'opérateur mobile du client et confirme le paiement.
+This plugin relies on K-Pay, a third-party Mobile Money payment service, to
+process payments. Without this service the plugin cannot work: K-Pay is what
+contacts the customer's mobile operator and confirms the payment.
 
-Les échanges ont lieu avec https://admin.kpay.site aux moments suivants :
+Data is exchanged with https://admin.kpay.site at these points:
 
-* À la commande, le plugin transmet le montant, la devise, la référence de la
-  commande, l'opérateur choisi et le numéro de téléphone Mobile Money du client,
-  afin d'initier la demande de paiement.
-* Pendant l'attente, le plugin interroge le service avec l'identifiant de la
-  transaction pour en connaître le statut.
-* En mode passerelle hébergée, le client est redirigé vers la page de paiement
-  de K-Pay, puis renvoyé sur la boutique.
-* Le service notifie la boutique par webhook signé lorsque le paiement aboutit
-  ou échoue.
+* On checkout, the plugin sends the amount, currency, order reference, selected
+  operator and the customer's Mobile Money phone number, in order to start the
+  payment request.
+* While waiting, the plugin queries the service with the transaction identifier
+  to retrieve its status.
+* In hosted gateway mode, the customer is redirected to the K-Pay payment page,
+  then returned to the store.
+* The service notifies the store through a signed webhook when the payment
+  succeeds or fails.
 
-Aucune donnée n'est transmise avant que le client ait choisi K-Pay comme moyen
-de paiement et validé sa commande.
+No data is sent before the customer selects K-Pay as the payment method and
+places the order.
 
-Service fourni par K-Pay :
+Service provided by K-Pay:
 
-* Site : https://kpay.site
-* Tableau de bord : https://admin.kpay.site
-* Conditions d'utilisation : https://kpay.site/legal/conditions
-* Politique de confidentialité : https://kpay.site/legal/confidentialite
-* Mentions légales : https://kpay.site/legal/mentions
+* Website: https://kpay.site
+* Dashboard: https://admin.kpay.site
+* Terms of use: https://kpay.site/legal/conditions
+* Privacy policy: https://kpay.site/legal/confidentialite
+* Legal notice: https://kpay.site/legal/mentions
 
 == Installation ==
 
-1. Téléversez le dossier `wc-kpay-gateway` dans `/wp-content/plugins/`, ou
-   installez le plugin depuis Extensions → Ajouter.
-2. Activez le plugin depuis le menu Extensions.
-3. Allez dans WooCommerce → Réglages → Paiements → K-Pay (Mobile Money).
-4. Renseignez vos clés API, choisissez vos opérateurs et configurez l'URL du
-   webhook dans votre tableau de bord K-Pay.
-5. Réglez le mode de paiement sur celui configuré pour votre Application dans le
-   tableau de bord K-Pay. En mode passerelle hébergée, renseignez également le
-   secret passerelle.
-6. Testez en Sandbox avant de basculer en production.
+1. Upload the `wc-kpay-gateway` folder to `/wp-content/plugins/`, or install the
+   plugin from Plugins → Add New.
+2. Activate the plugin through the Plugins menu.
+3. Go to WooCommerce → Settings → Payments → K-Pay (Mobile Money).
+4. Enter your API keys, select your operators, and configure the webhook URL in
+   your K-Pay dashboard.
+5. Set the payment mode to the one configured for your Application in the K-Pay
+   dashboard. In hosted gateway mode, also enter the gateway secret.
+6. Test in Sandbox before switching to production.
 
-WooCommerce doit être installé et actif.
+WooCommerce must be installed and active.
 
 == Frequently Asked Questions ==
 
-= K-Pay n'apparaît pas au checkout =
+= K-Pay does not appear at checkout =
 
-Vérifiez que la case « Activer » est cochée, que les clés de l'environnement
-courant sont renseignées, et que la devise de votre boutique correspond à un
-opérateur activé. Les réglages affichent la raison exacte.
+Check that the "Enable" box is ticked, that the keys for the current
+environment are filled in, and that your store currency matches an enabled
+operator. The settings screen shows the exact reason.
 
-= Ma boutique est en euros, puis-je utiliser K-Pay ? =
+= My store is in euros, can I use K-Pay? =
 
-Non. K-Pay encaisse dans la devise du pays de l'opérateur et ne convertit
-aucune devise. Réglez votre boutique sur XAF, XOF, KES, CDF, UGX, RWF, ZMW ou SLE.
+No. K-Pay collects in the currency of the operator's country and does not
+convert currencies. Set your store to XAF, XOF, KES, CDF, UGX, RWF, ZMW or SLE.
 
-= Comment tester sans argent réel ? =
+= How do I test without real money? =
 
-Choisissez l'environnement Sandbox et utilisez vos clés `kpay_test_`. En
-sandbox, le numéro saisi détermine le résultat : `237653456789` réussit,
-`237653456029` échoue.
+Select the Sandbox environment and use your `kpay_test_` keys. In sandbox, the
+phone number determines the outcome: `237653456789` succeeds, `237653456029`
+fails.
 
-= Les commandes restent en attente =
+= Orders stay pending =
 
-Le webhook n'atteint pas votre site. En local, c'est normal : K-Pay ne peut pas
-joindre `localhost`. En production, vérifiez l'URL du webhook et le secret
-configurés dans votre tableau de bord K-Pay.
+The webhook is not reaching your site. This is expected on a local install:
+K-Pay cannot reach `localhost`. In production, check the webhook URL and secret
+configured in your K-Pay dashboard.
 
-= Mes paiements sont refusés avec une erreur 400 =
+= My payments are rejected with a 400 error =
 
-Le mode de paiement du plugin ne correspond pas à celui configuré pour votre
-Application dans le tableau de bord K-Pay. C'est la configuration K-Pay qui fait
-autorité : alignez le réglage du plugin sur celui de votre Application.
+The plugin payment mode does not match the one configured for your Application
+in the K-Pay dashboard. The K-Pay configuration is authoritative: align the
+plugin setting with your Application.
 
-= Quelle différence entre le secret webhook et le secret passerelle ? =
+= What is the difference between the webhook secret and the gateway secret? =
 
-Le secret webhook vérifie la signature des notifications que K-Pay envoie à
-votre site. Le secret passerelle, utilisé uniquement en mode passerelle
-hébergée, vérifie la signature de l'URL par laquelle le client est renvoyé sur
-votre boutique. Les deux sont distincts et ne sont pas interchangeables. Sans
-secret passerelle, le mode passerelle refuse d'initier un paiement.
+The webhook secret verifies the signature of notifications K-Pay sends to your
+site. The gateway secret, used only in hosted gateway mode, verifies the
+signature of the URL the customer is returned through. They are distinct and
+not interchangeable. Without a gateway secret, hosted gateway mode refuses to
+start a payment.
 
-= Où consulter mes soldes et effectuer mes retraits ? =
+= Where do I check balances and make payouts? =
 
-Depuis votre tableau de bord K-Pay, sur https://admin.kpay.site. Le plugin ne
-gère que l'encaissement.
+From your K-Pay dashboard at https://admin.kpay.site. The plugin only handles
+collection.
 
-= Le plugin est-il compatible avec le checkout en blocs ? =
+= Is the plugin compatible with the block checkout? =
 
-Oui, ainsi qu'avec le checkout classique et le stockage HPOS des commandes.
+Yes, as well as with the classic checkout and HPOS order storage.
 
 == Changelog ==
 
 = 2.1.0 =
-* Nouveau mode « Passerelle hébergée » : le client paie sur la page K-Pay, le
-  retour est authentifié par signature puis reconfirmé auprès de l'API
-* Nouveau réglage « Langue » : français, anglais, ou langue du site
-* Nouveau réglage « Secret passerelle », distinct du secret webhook
-* Sécurité : le montant confirmé est comparé au total de la commande ; une
-  confirmation portant sur un montant insuffisant ne valide plus la commande
-* Sécurité : seuls les événements `payment.*` pilotent le statut d'une commande
-  (les remboursements et retraits ne peuvent plus marquer une commande payée)
-* Sécurité : horodatage désormais obligatoire sur les notifications, et
-  déduplication des notifications rejouées
-* Sécurité : vérification du statut limitée en fréquence, et réponses
-  uniformisées pour ne pas révéler l'existence d'une commande
-* Les soldes et les retraits se gèrent désormais depuis le tableau de bord
-  K-Pay ; le menu correspondant a été retiré de WordPress
+* New "Hosted gateway" mode: the customer pays on the K-Pay page, and the
+  return is authenticated by signature then reconfirmed with the API
+* New "Language" setting: French, English, or the site language
+* New "Gateway secret" setting, distinct from the webhook secret
+* Security: the confirmed amount is compared against the order total; a
+  confirmation for an insufficient amount no longer completes the order
+* Security: only `payment.*` events drive order status (refunds and payouts can
+  no longer mark an order as paid)
+* Security: timestamps are now mandatory on notifications, and replayed
+  notifications are deduplicated
+* Security: status checks are rate-limited, and responses are uniform so they
+  do not reveal whether an order exists
+* Balances and payouts are now managed from the K-Pay dashboard; the
+  corresponding menu was removed from WordPress
 
 = 2.0.0 =
-* Réécriture complète, conforme à l'API K-Pay v1
-* Menu K-Pay : soldes par devise et retraits Mobile Money
-* Prise en charge du checkout en blocs et de HPOS
-* Webhooks signés avec vérification HMAC et fenêtre anti-rejeu
-* Bascule Sandbox/Live avec validation du préfixe des clés
-* Cloisonnement strict des données test et production
-* 12 pays et 23 opérateurs pris en charge
+* Complete rewrite, compliant with K-Pay API v1
+* K-Pay menu: balances per currency and Mobile Money payouts
+* Support for the block checkout and HPOS
+* Signed webhooks with HMAC verification and a replay window
+* Sandbox/Live switch with key prefix validation
+* Strict separation of test and production data
+* 12 countries and 23 operators supported
 
 == Upgrade Notice ==
 
 = 2.1.0 =
-Le réglage « Mode de paiement » doit correspondre au mode configuré pour votre
-Application dans le tableau de bord K-Pay, sinon les paiements sont refusés. En
-mode « Passerelle hébergée », renseignez le secret passerelle. Le menu K-Pay
-est retiré : soldes et retraits passent par le tableau de bord.
+The "Payment mode" setting must match the mode configured for your Application
+in the K-Pay dashboard, otherwise payments are rejected. In hosted gateway
+mode, also set the gateway secret.
 
 = 2.0.0 =
-Version initiale publique. Configurez le secret webhook dans les réglages :
-sans lui, les notifications de paiement sont rejetées.
+First public release. Set the webhook secret in the settings: without it,
+payment notifications are rejected.
