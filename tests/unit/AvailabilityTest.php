@@ -54,7 +54,7 @@ final class AvailabilityTest extends TestCase {
 		$gateway = $this->gateway( array(
 			'environment'     => 'live',
 			'live_api_key'    => 'kpay_live_abc',
-			'live_secret_key' => 'sk_live_abc',
+			'live_secret_key' => 'f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f',
 		) );
 		$this->assertTrue( $gateway->is_available() );
 		$this->assertSame( 'live', $gateway->get_environment() );
@@ -120,7 +120,7 @@ final class AvailabilityTest extends TestCase {
 			'enabled'            => 'yes',
 			'environment'        => 'sandbox',
 			'sandbox_api_key'    => 'kpay_test_abc',
-			'sandbox_secret_key' => 'sk_test_abc',
+			'sandbox_secret_key' => 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
 			// pas de clé 'providers'
 		) );
 		$GLOBALS['kpay_test_currency'] = 'XAF';
@@ -146,7 +146,7 @@ final class AvailabilityTest extends TestCase {
 			'enabled'            => 'yes',
 			'environment'        => 'sandbox',
 			'sandbox_api_key'    => 'kpay_test_abc',
-			'sandbox_secret_key' => 'sk_test_abc',
+			'sandbox_secret_key' => 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
 		);
 
 		$this->assertCount( 5, $gateway->get_active_providers(), 'Tous les opérateurs XAF attendus.' );

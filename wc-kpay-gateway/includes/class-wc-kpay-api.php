@@ -18,18 +18,37 @@ class WC_KPay_API {
 	private $secret_key;
 
 	public function __construct( $api_key, $secret_key ) {
-		$this->api_key    = $api_key;
-		$this->secret_key = $secret_key;
+		$this->api_key = trim( (string) $api_key );
+		// Un préfixe « sk_live_ » recopié depuis une ancienne documentation
+		// ferait échouer l'authentification côté K-Pay : on le retire ici,
+		// au plus près de l'en-tête HTTP, plutôt qu'à la seule validation.
+		$this->secret_key = self::normalize_secret_key( $secret_key );
 	}
 
 	/**
-	 * Préfixes de clés par environnement (spec : l'URL est identique, seul le
-	 * préfixe de la clé sélectionne l'environnement côté K-Pay).
+	 * Préfixes de clés API par environnement (spec : l'URL est identique, seul
+	 * le préfixe de la clé API sélectionne l'environnement côté K-Pay).
+	 *
+	 * La clé secrète, elle, n'est PAS préfixée : K-Pay la génère comme une
+	 * chaîne hexadécimale brute (32 octets → 64 caractères). Exiger un
+	 * préfixe « sk_live_ » rejetait donc toutes les clés réelles.
 	 */
 	const KEY_PREFIXES = array(
-		'sandbox' => array( 'api' => 'kpay_test_', 'secret' => 'sk_test_' ),
-		'live'    => array( 'api' => 'kpay_live_', 'secret' => 'sk_live_' ),
+		'sandbox' => array( 'api' => 'kpay_test_' ),
+		'live'    => array( 'api' => 'kpay_live_' ),
 	);
+
+	/**
+	 * Préfixes tolérés en tête de clé secrète.
+	 *
+	 * K-Pay n'en émet aucun, mais la documentation en a longtemps annoncé :
+	 * un marchand a pu en recopier un à la main. On les accepte et on les
+	 * ignore plutôt que de refuser une clé par ailleurs valide.
+	 */
+	const LEGACY_SECRET_PREFIXES = array( 'sk_test_', 'sk_live_', 'sk_' );
+
+	/** Longueur d'une clé secrète K-Pay (32 octets en hexadécimal). */
+	const SECRET_KEY_LENGTH = 64;
 
 	/**
 	 * Environnement déduit du préfixe d'une clé API.
@@ -96,18 +115,51 @@ class WC_KPay_API {
 			);
 		}
 
-		if ( 0 !== strpos( (string) $secret_key, $expected['secret'] ) ) {
+		// La clé secrète ne porte aucun marqueur d'environnement : c'est la
+		// clé API, seule, qui sélectionne sandbox ou live. On ne peut donc
+		// que contrôler sa forme — une chaîne hexadécimale — pour attraper
+		// les erreurs de copier-coller les plus courantes (clé tronquée,
+		// clé API recopiée deux fois, espaces parasites).
+		$normalized = self::normalize_secret_key( $secret_key );
+
+		if ( ! preg_match( '/^[0-9a-fA-F]+$/', $normalized ) ) {
 			return new WP_Error(
-				'kpay_secret_prefix_mismatch',
+				'kpay_secret_format_invalid',
+				__( 'La clé secrète n\'a pas le format attendu : K-Pay délivre une suite de 64 caractères hexadécimaux (0-9, a-f), sans préfixe. Recopiez-la depuis votre tableau de bord K-Pay, sans espace ni retour à la ligne.', 'k-pay-for-woocommerce' )
+			);
+		}
+
+		if ( strlen( $normalized ) !== self::SECRET_KEY_LENGTH ) {
+			return new WP_Error(
+				'kpay_secret_length_invalid',
 				sprintf(
-					/* translators: %s: préfixe attendu */
-					__( 'La clé secrète ne commence pas par %s : elle n\'appartient pas au même environnement que la clé API.', 'k-pay-for-woocommerce' ),
-					$expected['secret']
+					/* translators: 1: longueur attendue, 2: longueur reçue */
+					__( 'La clé secrète devrait compter %1$d caractères, mais celle saisie en compte %2$d : elle a probablement été tronquée à la copie.', 'k-pay-for-woocommerce' ),
+					self::SECRET_KEY_LENGTH,
+					strlen( $normalized )
 				)
 			);
 		}
 
 		return true;
+	}
+
+	/**
+	 * Nettoie une clé secrète avant usage : espaces autour, et préfixe
+	 * historique éventuellement recopié depuis une ancienne documentation.
+	 *
+	 * @return string
+	 */
+	public static function normalize_secret_key( $secret_key ) {
+		$secret_key = trim( (string) $secret_key );
+
+		foreach ( self::LEGACY_SECRET_PREFIXES as $prefix ) {
+			if ( 0 === strpos( $secret_key, $prefix ) ) {
+				return substr( $secret_key, strlen( $prefix ) );
+			}
+		}
+
+		return $secret_key;
 	}
 
 	/**

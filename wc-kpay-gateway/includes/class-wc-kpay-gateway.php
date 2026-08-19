@@ -235,29 +235,33 @@ class WC_KPay_Gateway extends WC_Payment_Gateway {
 			'sandbox_section' => array(
 				'title'       => __( 'Clés Sandbox', 'k-pay-for-woocommerce' ),
 				'type'        => 'title',
-				'description' => __( 'Clés de test, préfixées <code>kpay_test_</code> et <code>sk_test_</code>.', 'k-pay-for-woocommerce' ),
+				'description' => __( 'Clés de test. La clé API commence par <code>kpay_test_</code> ; la clé secrète est une suite de 64 caractères hexadécimaux, <strong>sans préfixe</strong>.', 'k-pay-for-woocommerce' ),
 			),
 			'sandbox_api_key' => array(
 				'title' => __( 'Clé API Sandbox', 'k-pay-for-woocommerce' ),
 				'type'  => 'text',
 			),
 			'sandbox_secret_key' => array(
-				'title' => __( 'Clé secrète Sandbox', 'k-pay-for-woocommerce' ),
-				'type'  => 'password',
+				'title'       => __( 'Clé secrète Sandbox', 'k-pay-for-woocommerce' ),
+				'type'        => 'password',
+				'description' => __( 'Affichée une seule fois, à la génération de la clé. Aucun préfixe : 64 caractères hexadécimaux.', 'k-pay-for-woocommerce' ),
+				'desc_tip'    => true,
 			),
 
 			'live_section' => array(
 				'title'       => __( 'Clés Live', 'k-pay-for-woocommerce' ),
 				'type'        => 'title',
-				'description' => __( 'Clés de production, préfixées <code>kpay_live_</code> et <code>sk_live_</code>. Disponibles après validation KYC.', 'k-pay-for-woocommerce' ),
+				'description' => __( 'Clés de production, disponibles après validation KYC. La clé API commence par <code>kpay_live_</code> ; la clé secrète est une suite de 64 caractères hexadécimaux, <strong>sans préfixe</strong>.', 'k-pay-for-woocommerce' ),
 			),
 			'live_api_key' => array(
 				'title' => __( 'Clé API Live', 'k-pay-for-woocommerce' ),
 				'type'  => 'text',
 			),
 			'live_secret_key' => array(
-				'title' => __( 'Clé secrète Live', 'k-pay-for-woocommerce' ),
-				'type'  => 'password',
+				'title'       => __( 'Clé secrète Live', 'k-pay-for-woocommerce' ),
+				'type'        => 'password',
+				'description' => __( 'Affichée une seule fois, à la génération de la clé. Aucun préfixe : 64 caractères hexadécimaux.', 'k-pay-for-woocommerce' ),
+				'desc_tip'    => true,
 			),
 
 			'webhook_section' => array(

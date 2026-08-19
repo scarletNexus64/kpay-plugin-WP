@@ -47,7 +47,7 @@ final class PaymentFlowTest extends TestCase {
 
 		// En-têtes d'authentification.
 		$this->assertSame( 'kpay_test_abc', $request['args']['headers']['X-API-Key'] );
-		$this->assertSame( 'sk_test_abc', $request['args']['headers']['X-Secret-Key'] );
+		$this->assertSame( 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90', $request['args']['headers']['X-Secret-Key'] );
 		$this->assertSame( 'application/json', $request['args']['headers']['Content-Type'] );
 
 		// Noms de champs exacts de la spec.

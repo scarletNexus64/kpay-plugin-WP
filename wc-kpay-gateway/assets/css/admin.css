@@ -219,7 +219,8 @@
 }
 
 /* Les clés et secrets sont des chaînes opaques : une police à chasse fixe
-   rend leur préfixe (kpay_test_, sk_live_…) lisible d'un coup d'œil. */
+   rend le préfixe d'une clé API (kpay_test_, kpay_live_) lisible d'un coup
+   d'œil, et une clé secrète tronquée plus facile à repérer. */
 .kpay-settings #woocommerce_kpay_sandbox_api_key,
 .kpay-settings #woocommerce_kpay_sandbox_secret_key,
 .kpay-settings #woocommerce_kpay_live_api_key,

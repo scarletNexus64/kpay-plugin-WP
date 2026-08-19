@@ -3,7 +3,7 @@
  * Plugin Name: K-Pay for WooCommerce
  * Plugin URI: https://kpay.site
  * Description: Passerelle de paiement Mobile Money (MTN MoMo, Orange Money) via K-Pay. Supporte le Cameroun et 11 autres pays africains.
- * Version: 2.1.0
+ * Version: 2.1.1
  * Author: Steve Boussa
  * Author URI: https://profiles.wordpress.org/steveboussa/
  * License: GPL-2.0-or-later
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WC_KPAY_VERSION', '2.1.0' );
+define( 'WC_KPAY_VERSION', '2.1.1' );
 define( 'WC_KPAY_PLUGIN_FILE', __FILE__ );
 define( 'WC_KPAY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_KPAY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

@@ -12,6 +12,13 @@ use PHPUnit\Framework\TestCase;
 
 final class EnvironmentTest extends TestCase {
 
+	/**
+	 * Clés secrètes au format réel : 64 caractères hexadécimaux, sans
+	 * préfixe — c'est exactement ce que K-Pay délivre au marchand.
+	 */
+	private const SANDBOX_SECRET = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+	private const LIVE_SECRET    = 'f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f';
+
 	protected function setUp(): void {
 		kpay_test_reset();
 		WC_Admin_Settings::$errors = array();
@@ -28,9 +35,9 @@ final class EnvironmentTest extends TestCase {
 		return array(
 			'environment'        => $environment,
 			'sandbox_api_key'    => 'kpay_test_abc',
-			'sandbox_secret_key' => 'sk_test_abc',
+			'sandbox_secret_key' => self::SANDBOX_SECRET,
 			'live_api_key'       => 'kpay_live_xyz',
-			'live_secret_key'    => 'sk_live_xyz',
+			'live_secret_key'    => self::LIVE_SECRET,
 		);
 	}
 
@@ -57,7 +64,7 @@ final class EnvironmentTest extends TestCase {
 		$sandbox->get_api()->get_payment( 'pay_1' );
 		$headers = $GLOBALS['kpay_test_http_requests'][0]['args']['headers'];
 		$this->assertSame( 'kpay_test_abc', $headers['X-API-Key'] );
-		$this->assertSame( 'sk_test_abc', $headers['X-Secret-Key'] );
+		$this->assertSame( self::SANDBOX_SECRET, $headers['X-Secret-Key'] );
 
 		$GLOBALS['kpay_test_http_requests'] = array();
 
@@ -68,7 +75,7 @@ final class EnvironmentTest extends TestCase {
 		$live->get_api()->get_payment( 'pay_1' );
 		$headers = $GLOBALS['kpay_test_http_requests'][0]['args']['headers'];
 		$this->assertSame( 'kpay_live_xyz', $headers['X-API-Key'] );
-		$this->assertSame( 'sk_live_xyz', $headers['X-Secret-Key'] );
+		$this->assertSame( self::LIVE_SECRET, $headers['X-Secret-Key'] );
 	}
 
 	/** Spec : l'URL ne change pas d'un environnement à l'autre. */
@@ -124,16 +131,64 @@ final class EnvironmentTest extends TestCase {
 		$this->assertSame( 'kpay_test_abc', $headers['X-API-Key'], 'Une commande sandbox doit rester interrogée en sandbox.' );
 	}
 
-	// --- Validation des préfixes ---
+	// --- Validation des clés ---
 
 	public function test_matching_keys_are_valid(): void {
-		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_test_a', 'sk_test_a', 'sandbox' ) );
-		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_live_a', 'sk_live_a', 'live' ) );
+		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_test_a', self::SANDBOX_SECRET, 'sandbox' ) );
+		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_live_a', self::LIVE_SECRET, 'live' ) );
+	}
+
+	/**
+	 * K-Pay délivre la clé secrète en hexadécimal brut : aucun préfixe
+	 * « sk_live_ » n'est émis. En exiger un rejetait toutes les clés
+	 * authentiques — le plugin était inutilisable avec de vraies clés.
+	 */
+	public function test_unprefixed_secret_is_accepted(): void {
+		$this->assertTrue(
+			WC_KPay_API::validate_keys( 'kpay_live_a', self::LIVE_SECRET, 'live' ),
+			'Une clé secrète K-Pay authentique ne porte aucun préfixe.'
+		);
+	}
+
+	/** Un préfixe recopié depuis l'ancienne documentation reste toléré. */
+	public function test_legacy_prefixed_secret_is_accepted(): void {
+		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_live_a', 'sk_live_' . self::LIVE_SECRET, 'live' ) );
+		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_test_a', 'sk_test_' . self::SANDBOX_SECRET, 'sandbox' ) );
+	}
+
+	/** …et il est retiré avant l'envoi, sinon K-Pay refuse l'authentification. */
+	public function test_legacy_prefix_is_stripped_from_header(): void {
+		$api = new WC_KPay_API( 'kpay_live_a', 'sk_live_' . self::LIVE_SECRET );
+		$api->get_application_info();
+
+		$request = $GLOBALS['kpay_test_http_requests'][0];
+		$this->assertSame( self::LIVE_SECRET, $request['args']['headers']['X-Secret-Key'] );
+	}
+
+	/** Les espaces d'un copier-coller ne doivent pas invalider la clé. */
+	public function test_surrounding_whitespace_is_tolerated(): void {
+		$this->assertTrue( WC_KPay_API::validate_keys( 'kpay_live_a', "  " . self::LIVE_SECRET . "\n", 'live' ) );
+	}
+
+	/** Une clé tronquée à la copie est signalée pour ce qu'elle est. */
+	public function test_truncated_secret_is_rejected(): void {
+		$result = WC_KPay_API::validate_keys( 'kpay_live_a', substr( self::LIVE_SECRET, 0, 40 ), 'live' );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'kpay_secret_length_invalid', $result->get_error_code() );
+	}
+
+	/** La clé API recopiée par erreur dans le champ secret. */
+	public function test_non_hexadecimal_secret_is_rejected(): void {
+		$result = WC_KPay_API::validate_keys( 'kpay_live_a', 'kpay_live_deadbeef', 'live' );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'kpay_secret_format_invalid', $result->get_error_code() );
 	}
 
 	/** L'erreur la plus coûteuse : des clés de test en production. */
 	public function test_test_keys_in_live_mode_are_rejected(): void {
-		$result = WC_KPay_API::validate_keys( 'kpay_test_a', 'sk_test_a', 'live' );
+		$result = WC_KPay_API::validate_keys( 'kpay_test_a', self::SANDBOX_SECRET, 'live' );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'kpay_key_environment_mismatch', $result->get_error_code() );
@@ -142,18 +197,10 @@ final class EnvironmentTest extends TestCase {
 
 	/** L'inverse : des clés de production sur une boutique en test. */
 	public function test_live_keys_in_sandbox_mode_are_rejected(): void {
-		$result = WC_KPay_API::validate_keys( 'kpay_live_a', 'sk_live_a', 'sandbox' );
+		$result = WC_KPay_API::validate_keys( 'kpay_live_a', self::LIVE_SECRET, 'sandbox' );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'kpay_key_environment_mismatch', $result->get_error_code() );
-	}
-
-	/** Clé API et clé secrète de deux environnements différents. */
-	public function test_mismatched_key_pair_is_rejected(): void {
-		$result = WC_KPay_API::validate_keys( 'kpay_test_a', 'sk_live_a', 'sandbox' );
-
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'kpay_secret_prefix_mismatch', $result->get_error_code() );
 	}
 
 	public function test_foreign_key_is_rejected(): void {
@@ -174,7 +221,7 @@ final class EnvironmentTest extends TestCase {
 		$gateway = $this->gateway( array(
 			'environment'     => 'live',
 			'live_api_key'    => 'kpay_test_oups',
-			'live_secret_key' => 'sk_test_oups',
+			'live_secret_key' => self::SANDBOX_SECRET,
 		) );
 
 		$gateway->process_admin_options();
@@ -269,7 +316,7 @@ final class EnvironmentTest extends TestCase {
 		$gateway = $this->gateway( array(
 			'environment'     => 'live',
 			'live_api_key'    => 'kpay_test_oups',
-			'live_secret_key' => 'sk_test_oups',
+			'live_secret_key' => self::SANDBOX_SECRET,
 		) );
 
 		ob_start();

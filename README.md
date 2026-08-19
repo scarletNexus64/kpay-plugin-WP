@@ -89,7 +89,8 @@ En résumé :
    CDF, UGX, RWF, ZMW ou SLE. K-Pay ne convertit aucune devise — une boutique en
    EUR ne pourra pas l'utiliser.
 2. **WooCommerce → Réglages → Paiements → K-Pay** : cochez « Activer », gardez
-   l'environnement **Sandbox**, collez vos clés `kpay_test_…` / `sk_test_…`.
+   l'environnement **Sandbox**, collez votre clé API `kpay_test_…` et votre
+   clé secrète (64 caractères hexadécimaux, sans préfixe).
 3. Réglez le **Mode de paiement** sur celui configuré pour votre Application
    dans le tableau de bord K-Pay : **USSD** (le client saisit son numéro sur
    votre site) ou **Passerelle hébergée** (le client est redirigé vers la page

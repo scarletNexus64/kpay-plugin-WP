@@ -64,8 +64,13 @@ Récupérez vos clés depuis votre tableau de bord K-Pay :
 
 | Environnement | Clé API | Clé secrète |
 | --- | --- | --- |
-| **Sandbox** (test) | `kpay_test_…` | `sk_test_…` |
-| **Live** (production) | `kpay_live_…` | `sk_live_…` |
+| **Sandbox** (test) | `kpay_test_…` | 64 caractères hexadécimaux, sans préfixe |
+| **Live** (production) | `kpay_live_…` | 64 caractères hexadécimaux, sans préfixe |
+
+Seule la **clé API** porte un préfixe : c'est lui qui sélectionne
+l'environnement côté K-Pay. La **clé secrète** n'en porte aucun — elle se
+présente comme `3f8a1c…` et n'est affichée qu'une seule fois, au moment où
+vous la générez.
 
 Les clés Live sont débloquées après validation KYC. Les deux paires sont
 conservées séparément : renseignez vos clés Live une fois, et basculez en
@@ -264,8 +269,11 @@ suivi automatique prend le relais tant que le client reste sur la page. En
 production, vérifiez l'URL du webhook et le secret dans votre tableau de bord.
 
 **Une clé est refusée**
-Le préfixe doit correspondre à l'environnement : `kpay_test_` en Sandbox,
-`kpay_live_` en Live. Le message d'erreur précise ce qui est attendu.
+Pour la clé **API**, le préfixe doit correspondre à l'environnement :
+`kpay_test_` en Sandbox, `kpay_live_` en Live. Pour la clé **secrète**, il n'y
+a pas de préfixe à chercher : seuls sa longueur (64 caractères) et son alphabet
+(hexadécimal) sont contrôlés — un message « tronquée à la copie » signale le
+cas le plus courant. Le message d'erreur précise toujours ce qui est attendu.
 
 **Les paiements sont refusés avec une erreur 400**
 Le **Mode de paiement** du plugin ne correspond probablement pas à celui

@@ -31,10 +31,18 @@ function kpay_mock_http( $preempt, $args, $url ) {
 	update_option( 'kpay_mock_calls', array_slice( $log, -50 ), false );
 
 	if ( '/api/v1/payments/me' === $path ) {
+		// L'API réelle authentifie la paire de clés avant de répondre, et
+		// l'environnement renvoyé est celui de la clé présentée — pas une
+		// constante. Simuler cela permet de vérifier la bascule Live.
+		$auth = kpay_mock_authenticate( $args );
+		if ( is_array( $auth ) ) {
+			return $auth;
+		}
+
 		return kpay_mock_response( 200, array(
 			'application' => array( 'id' => 'app_test_1', 'name' => 'Boutique Test' ),
 			'company'     => array( 'id' => 'co_test_1', 'name' => 'Test Inc' ),
-			'environment' => 'TEST',
+			'environment' => $auth,
 		) );
 	}
 
@@ -129,6 +137,52 @@ function kpay_mock_init( $body ) {
 	}
 
 	return kpay_mock_response( 201, $payment );
+}
+
+/**
+ * Reproduit ApiKeyAuthGuard : les deux en-têtes sont requis, la clé API porte
+ * le préfixe d'environnement, et la clé secrète est une chaîne hexadécimale
+ * de 64 caractères SANS préfixe — c'est ce que délivre `generateSecretKey()`
+ * côté backend (randomBytes(32).toString('hex')).
+ *
+ * @return string|array 'TEST'/'PRODUCTION', ou une réponse d'erreur.
+ */
+function kpay_mock_authenticate( $args ) {
+	$headers = isset( $args['headers'] ) ? (array) $args['headers'] : array();
+	$api     = isset( $headers['X-API-Key'] ) ? $headers['X-API-Key'] : '';
+	$secret  = isset( $headers['X-Secret-Key'] ) ? $headers['X-Secret-Key'] : '';
+
+	if ( '' === $api || '' === $secret ) {
+		return kpay_mock_response( 401, array(
+			'statusCode' => 401,
+			'message'    => 'API Key and Secret Key are required',
+			'error'      => 'Unauthorized',
+		) );
+	}
+
+	// Une clé secrète authentique n'a pas de préfixe : si le plugin en laissait
+	// passer un, l'API réelle refuserait l'authentification. On refuse ici
+	// aussi, pour que le test attrape la régression.
+	if ( ! preg_match( '/^[0-9a-f]{64}$/i', $secret ) ) {
+		return kpay_mock_response( 401, array(
+			'statusCode' => 401,
+			'message'    => 'Invalid API credentials',
+			'error'      => 'Unauthorized',
+		) );
+	}
+
+	if ( 0 === strpos( $api, 'kpay_live_' ) ) {
+		return 'PRODUCTION';
+	}
+	if ( 0 === strpos( $api, 'kpay_test_' ) ) {
+		return 'TEST';
+	}
+
+	return kpay_mock_response( 401, array(
+		'statusCode' => 401,
+		'message'    => 'Invalid API credentials',
+		'error'      => 'Unauthorized',
+	) );
 }
 
 function kpay_mock_response( $code, array $body ) {

@@ -52,12 +52,12 @@ Chaque requête authentifiée transmet deux en-têtes HTTP :
 | En-tête | Type | Description |
 | --- | --- | --- |
 | `X-API-Key` | string | Clé publique. Préfixe `kpay_test_` (sandbox) ou `kpay_live_` (production). |
-| `X-Secret-Key` | string | Clé secrète. Préfixe `sk_test_` (sandbox) ou `sk_live_` (production). |
+| `X-Secret-Key` | string | Clé secrète : 64 caractères hexadécimaux, sans préfixe. Elle ne porte aucun marqueur d'environnement — c'est la clé API qui le détermine. |
 
 Environnements :
 
-- Sandbox (test) : clés `kpay_test_` / `sk_test_`. KPay route vers l'environnement de test ; aucun argent réel. Disponible par défaut.
-- Production (live) : clés `kpay_live_` / `sk_live_`, débloquées après validation KYC. Transactions réelles.
+- Sandbox (test) : clé API `kpay_test_`. KPay route vers l'environnement de test ; aucun argent réel. Disponible par défaut.
+- Production (live) : clé API `kpay_live_`, débloquée après validation KYC. Transactions réelles.
 
 L'URL est identique dans les deux cas : seul le préfixe de clé change.
 Les clés transitent uniquement de serveur à serveur (jamais côté client),

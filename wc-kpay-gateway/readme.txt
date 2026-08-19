@@ -6,7 +6,7 @@ Tested up to: 7.0
 Requires PHP: 7.4
 WC requires at least: 7.0
 WC tested up to: 10.9
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -162,6 +162,17 @@ Yes, as well as with the classic checkout and HPOS order storage.
 
 == Changelog ==
 
+= 2.1.1 =
+* Fix: live and sandbox secret keys were rejected at save time. The plugin
+  expected an `sk_live_` / `sk_test_` prefix that K-Pay does not issue: secret
+  keys are plain 64-character hexadecimal strings. Merchants can now save their
+  real keys.
+* The secret key is now checked on length and alphabet instead, so a key
+  truncated while copying is reported for what it is.
+* A legacy `sk_live_` / `sk_test_` prefix copied from older documentation is
+  accepted and stripped before the request, instead of breaking authentication.
+* Settings screen and documentation now describe the real key format.
+
 = 2.1.0 =
 * New "Hosted gateway" mode: the customer pays on the K-Pay page, and the
   return is authenticated by signature then reconfirmed with the API
@@ -188,6 +199,11 @@ Yes, as well as with the classic checkout and HPOS order storage.
 * 12 countries and 23 operators supported
 
 == Upgrade Notice ==
+
+= 2.1.1 =
+Required if your keys were refused with "the secret key does not start with
+sk_live_". Update, then paste the secret key exactly as shown in your K-Pay
+dashboard — it has no prefix.
 
 = 2.1.0 =
 The "Payment mode" setting must match the mode configured for your Application

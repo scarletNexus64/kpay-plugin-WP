@@ -223,7 +223,7 @@ final class PollingTest extends TestCase {
 		kpay_test_settings( array(
 			'environment'     => 'live',
 			'live_api_key'    => 'kpay_live_zzz',
-			'live_secret_key' => 'sk_live_zzz',
+			'live_secret_key' => 'f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f',
 		) );
 
 		$order = $this->pending_order(); // _kpay_environment = sandbox
