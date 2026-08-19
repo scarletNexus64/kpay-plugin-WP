@@ -30,10 +30,15 @@ jobs:
       - name: Vérifier la syntaxe
         run: find wc-kpay-gateway -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      # PHPUnit 10 exige PHP >= 8.1 : sur 7.4, seule la syntaxe du plugin est
+      # vérifiable. C'est le but de cette entrée de matrice — s'assurer que le
+      # code reste analysable par la version minimale déclarée par l'en-tête.
       - name: Installer les dépendances de test
+        if: matrix.php != '7.4'
         working-directory: tests
         run: composer install --prefer-dist --no-progress
 
       - name: Tests unitaires
+        if: matrix.php != '7.4'
         working-directory: tests
         run: vendor/bin/phpunit
